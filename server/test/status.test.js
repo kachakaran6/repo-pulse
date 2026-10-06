@@ -12,25 +12,35 @@ test('statusOf status classification and boundary tests', async (t) => {
     assert.equal(statusOf('', now), 'dead');
   });
 
-  await t.test('active boundary: 0 to 7 days', () => {
+  await t.test('active boundary: 0 to 7 days (default)', () => {
     assert.equal(statusOf(new Date(now).toISOString(), now), 'active');
     assert.equal(statusOf(new Date(now - 1 * dayMs).toISOString(), now), 'active');
     assert.equal(statusOf(new Date(now - 7 * dayMs).toISOString(), now), 'active');
   });
 
-  await t.test('cooling boundary: 8 to 14 days', () => {
+  await t.test('cooling boundary: 8 to 14 days (default)', () => {
     assert.equal(statusOf(new Date(now - 8 * dayMs).toISOString(), now), 'cooling');
     assert.equal(statusOf(new Date(now - 14 * dayMs).toISOString(), now), 'cooling');
   });
 
-  await t.test('stale boundary: 15 to 30 days', () => {
+  await t.test('stale boundary: 15 to 30 days (default)', () => {
     assert.equal(statusOf(new Date(now - 15 * dayMs).toISOString(), now), 'stale');
     assert.equal(statusOf(new Date(now - 30 * dayMs).toISOString(), now), 'stale');
   });
 
-  await t.test('dead boundary: 31+ days', () => {
+  await t.test('dead boundary: 31+ days (default)', () => {
     assert.equal(statusOf(new Date(now - 31 * dayMs).toISOString(), now), 'dead');
     assert.equal(statusOf(new Date(now - 60 * dayMs).toISOString(), now), 'dead');
     assert.equal(statusOf(new Date(now - 365 * dayMs).toISOString(), now), 'dead');
+  });
+
+  await t.test('custom thresholds: 10 / 20 / 45 days', () => {
+    const custom = { active: 10, cooling: 20, stale: 45 };
+    assert.equal(statusOf(new Date(now - 10 * dayMs).toISOString(), now, custom), 'active');
+    assert.equal(statusOf(new Date(now - 11 * dayMs).toISOString(), now, custom), 'cooling');
+    assert.equal(statusOf(new Date(now - 20 * dayMs).toISOString(), now, custom), 'cooling');
+    assert.equal(statusOf(new Date(now - 21 * dayMs).toISOString(), now, custom), 'stale');
+    assert.equal(statusOf(new Date(now - 45 * dayMs).toISOString(), now, custom), 'stale');
+    assert.equal(statusOf(new Date(now - 46 * dayMs).toISOString(), now, custom), 'dead');
   });
 });
