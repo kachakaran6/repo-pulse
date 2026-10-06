@@ -19,6 +19,11 @@ export const initDb = async () => {
   try {
     const schemaSql = fs.readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
     await db.query(schemaSql);
+    // Purge any seeded demo data (IDs 101-108) so only authentic user repositories remain
+    const purged = await db.query('DELETE FROM repos WHERE github_id >= 101 AND github_id <= 108');
+    if (purged.rowCount > 0) {
+      console.log(`Purged ${purged.rowCount} seeded demo repositories. Retaining only authentic user data.`);
+    }
     console.log('Database schema verified.');
   } catch (err) {
     console.error('Database initialization warning:', err.message);
@@ -466,146 +471,24 @@ app.post('/api/sync', async (_req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
-// Seed deterministic demo data for instant evaluation
-app.post('/api/demo-seed', async (_req, res) => {
+// Purge any seeded demo data to ensure only authentic user data remains
+app.delete('/api/demo-seed', async (_req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not configured' });
   try {
-    const now = Date.now();
-    const day = 864e5;
-    const samples = [
-      {
-        id: 101,
-        name: 'repo-pulse',
-        url: 'https://github.com/kachakaran6/repo-pulse',
-        desc: 'Personal developer activity dashboard and repository pulse',
-        lang: 'JavaScript',
-        daysAgo: 0,
-        commits: [3, 2, 5, 1, 0, 4, 2, 0, 1, 0, 0, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-        label: 'Application',
-        lifecycle: 'active',
-        priority: 'high',
-        stack: ['React', 'Node.js', 'Express', 'PostgreSQL', 'Docker'],
-        fav: true,
-        notes: 'Targeting production release on Coolify.'
-      },
-      {
-        id: 102,
-        name: 'trust-tracker',
-        url: 'https://github.com/kachakaran6/Trust-Tracker',
-        desc: 'AI-powered financial transaction ledger and expense tracking',
-        lang: 'TypeScript',
-        daysAgo: 2,
-        commits: [0, 0, 1, 0, 2, 4, 3, 1, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        label: 'Web app',
-        lifecycle: 'active',
-        priority: 'high',
-        stack: ['Next.js', 'FastAPI', 'PostgreSQL'],
-        fav: true,
-        notes: 'Core ledger logic verified with PostHog analytics.'
-      },
-      {
-        id: 103,
-        name: 'ledgr-core',
-        url: 'https://github.com/kachakaran6/Ledgr',
-        desc: 'Double-entry accounting microservice with cryptographic audit trails',
-        lang: 'Go',
-        daysAgo: 10,
-        commits: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        label: 'API/service',
-        lifecycle: 'active',
-        priority: 'normal',
-        stack: ['Go', 'PostgreSQL', 'Redis'],
-        fav: false,
-        notes: 'Needs database vacuuming and read replica setup.'
-      },
-      {
-        id: 104,
-        name: 'equiptrack-be',
-        url: 'https://github.com/kachakaran6/equiptrack',
-        desc: 'Industrial asset management and telemetry ingestion engine',
-        lang: 'TypeScript',
-        daysAgo: 12,
-        commits: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        label: 'Full ERP',
-        lifecycle: 'active',
-        priority: 'normal',
-        stack: ['NestJS', 'PostgreSQL', 'Telegram API'],
-        fav: false,
-        notes: 'Automated nightly Telegram backup verified.'
-      },
-      {
-        id: 105,
-        name: 'chattalk-server',
-        url: 'https://github.com/kachakaran6/chattalk',
-        desc: 'WebSocket powered real-time team messaging engine',
-        lang: 'TypeScript',
-        daysAgo: 20,
-        commits: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        label: 'API/service',
-        lifecycle: 'paused',
-        priority: 'high',
-        stack: ['Node.js', 'Socket.IO', 'Redis'],
-        fav: false,
-        notes: 'High priority service paused while focusing on RepoPulse.'
-      },
-      {
-        id: 106,
-        name: 'beacon-landing',
-        url: 'https://github.com/kachakaran6/beacon',
-        desc: 'High-converting marketing static site for SaaS analytics',
-        lang: 'HTML',
-        daysAgo: 26,
-        commits: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0],
-        label: 'Client work',
-        lifecycle: 'completed',
-        priority: 'low',
-        stack: ['Astro', 'Tailwind CSS'],
-        fav: false,
-        notes: 'Launched and handed off.'
-      },
-      {
-        id: 107,
-        name: 'crypto-arbitrage-bot',
-        url: 'https://github.com/kachakaran6/crypto-bot',
-        desc: 'Experimental high-frequency DEX orderbook scanner',
-        lang: 'Python',
-        daysAgo: 58,
-        commits: Array(30).fill(0),
-        label: 'Experiment',
-        lifecycle: 'needs_review',
-        priority: 'low',
-        stack: ['Python', 'Asyncio', 'Web3.py'],
-        fav: false,
-        notes: 'No commits in ~2 months. Candidate for archive.'
-      },
-      {
-        id: 108,
-        name: 'legacy-invoice-pdf',
-        url: 'https://github.com/kachakaran6/invoice-pdf',
-        desc: 'Headless Chrome invoice generator with Puppeteer',
-        lang: 'JavaScript',
-        daysAgo: 120,
-        commits: Array(30).fill(0),
-        label: 'Library',
-        lifecycle: 'completed',
-        priority: 'low',
-        stack: ['Node.js', 'Puppeteer'],
-        fav: false,
-        notes: 'Frozen stable utility.'
-      }
-    ];
+    const result = await db.query('DELETE FROM repos WHERE github_id >= 101 AND github_id <= 108');
+    res.json({ ok: true, message: 'Seeded demo data removed', purged_count: result.rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    for (const s of samples) {
-      const lastCommit = new Date(now - s.daysAgo * day).toISOString();
-      await db.query(
-        `INSERT INTO repos (github_id, full_name, html_url, description, language, last_commit_at, commit_days, label, lifecycle_status, priority, tech_stack, notes, is_favorite, is_archived, synced_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,FALSE,now())
-         ON CONFLICT (github_id) DO UPDATE SET full_name=$2, html_url=$3, description=$4, language=$5,
-           last_commit_at=$6, commit_days=$7, label=$8, lifecycle_status=$9, priority=$10, tech_stack=$11, notes=$12, is_favorite=$13, synced_at=now()`,
-        [s.id, s.name, s.url, s.desc, s.lang, lastCommit, JSON.stringify(s.commits), s.label, s.lifecycle, s.priority, JSON.stringify(s.stack), s.notes, s.fav]
-      );
-    }
-    res.json({ message: 'Demo data loaded successfully', count: samples.length });
+// Delete an individual repository
+app.delete('/api/repos/:id', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const id = req.params.id;
+    await db.query('DELETE FROM repos WHERE github_id=$1', [id]);
+    res.json({ ok: true, message: `Repository ${id} deleted` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

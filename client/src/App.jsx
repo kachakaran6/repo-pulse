@@ -693,22 +693,6 @@ export default function App() {
     setBusy(false);
   };
 
-  const handleSeedDemo = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const res = await fetch('/api/demo-seed', { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || 'Demo seed failed');
-      }
-    } catch {
-      setError('Failed to load demo data');
-    }
-    await loadData();
-    setBusy(false);
-  };
-
   const handleSaveSettings = async (newSettings) => {
     try {
       const res = await fetch('/api/settings', {
@@ -811,9 +795,6 @@ export default function App() {
           </button>
           <button type="button" onClick={() => setSettingsOpen(true)} title="Configure Inactivity Thresholds & Token">
             ⚙️ Settings ({settings.active_max_days}/{settings.cooling_max_days}/{settings.stale_max_days}d)
-          </button>
-          <button type="button" onClick={handleSeedDemo} disabled={busy} title="Load sample repositories to evaluate features">
-            🧪 Demo seed
           </button>
           <button type="button" className="primary" onClick={handleSync} disabled={busy}>
             {busy ? 'Syncing...' : 'Sync repos'}
@@ -924,15 +905,15 @@ export default function App() {
           <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 13 }}>
             {search || statusFilter !== 'all'
               ? 'Try adjusting your search query or filter selection.'
-              : 'Add your GITHUB_TOKEN in Settings or click "Demo seed" to evaluate the dashboard with realistic sample data.'}
+              : 'Add your GITHUB_TOKEN in Settings and click "Sync repos" to fetch your authentic GitHub repositories.'}
           </p>
           {!repos.length && (
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <button type="button" className="primary" onClick={handleSeedDemo}>
-                Load sample data (Demo mode)
-              </button>
-              <button type="button" onClick={handleSync}>
+              <button type="button" className="primary" onClick={handleSync}>
                 Sync with GitHub
+              </button>
+              <button type="button" onClick={() => setSettingsOpen(true)}>
+                Configure Settings
               </button>
             </div>
           )}
