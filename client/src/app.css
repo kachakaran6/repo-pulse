@@ -688,3 +688,116 @@ button.text-btn:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Repository Detail Modal & Tag Cloud */
+.modal-card.modal-lg {
+  max-width: 680px;
+}
+
+.explanation-box {
+  background: var(--chalk);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--c, var(--ink));
+  padding: 10px 12px;
+  border-radius: 3px;
+  margin-bottom: var(--s3);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.explanation-box strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.clone-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--chalk);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  margin-bottom: var(--s3);
+}
+
+.clone-box code {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tag-pill {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: var(--chalk);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.tag-pill:hover {
+  border-color: var(--ink-soft);
+}
+
+.tag-pill.selected {
+  background: var(--ink);
+  color: var(--chalk);
+  border-color: var(--ink);
+}
+
+.tag-pill.removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-pill.removable span:last-child {
+  opacity: 0.6;
+  font-weight: bold;
+}
+
+.tag-pill.removable:hover span:last-child {
+  opacity: 1;
+}
+
+.help-box {
+  background: var(--chalk);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 10px 12px;
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--ink);
+}
+
+.help-box ol {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.help-box li {
+  margin-bottom: 4px;
+}
+
+.help-box a {
+  color: var(--ink);
+  font-weight: 600;
+}
+

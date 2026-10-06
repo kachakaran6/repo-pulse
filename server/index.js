@@ -42,41 +42,107 @@ app.get('/health', async (_req, res) => {
   res.json({ status: 'ok', service: 'repopulse-api', database: dbStatus, uptime: process.uptime() });
 });
 
-// The one place status is decided. Defaults to 7/14/30 days.
-export const statusOf = (lastCommitAt, now = Date.now(), thresholds = { active: 7, cooling: 14, stale: 30 }) => {
+// The one place status is decided with optional per-repo overrides
+export const statusOf = (lastCommitAt, now = Date.now(), thresholds = { active: 7, cooling: 14, stale: 30 }, overrides = null) => {
   if (!lastCommitAt) return 'dead';
   const days = Math.floor((now - new Date(lastCommitAt)) / 864e5);
-  return days <= thresholds.active ? 'active' : days <= thresholds.cooling ? 'cooling' : days <= thresholds.stale ? 'stale' : 'dead';
+  const activeLimit = overrides?.custom_active_days ?? thresholds.active ?? 7;
+  const coolingLimit = overrides?.custom_cooling_days ?? thresholds.cooling ?? 14;
+  const staleLimit = overrides?.custom_stale_days ?? thresholds.stale ?? 30;
+  return days <= activeLimit ? 'active' : days <= coolingLimit ? 'cooling' : days <= staleLimit ? 'stale' : 'dead';
+};
+
+// Explain why a repository received its observed status
+export const explainStatus = (lastCommitAt, now = Date.now(), thresholds = { active: 7, cooling: 14, stale: 30 }, overrides = null) => {
+  if (!lastCommitAt) return { status: 'dead', days: null, message: 'No commit activity ever recorded on GitHub' };
+  const days = Math.floor((now - new Date(lastCommitAt)) / 864e5);
+  const activeLimit = overrides?.custom_active_days ?? thresholds.active ?? 7;
+  const coolingLimit = overrides?.custom_cooling_days ?? thresholds.cooling ?? 14;
+  const staleLimit = overrides?.custom_stale_days ?? thresholds.stale ?? 30;
+  const hasOverride = Boolean(overrides?.custom_active_days || overrides?.custom_cooling_days || overrides?.custom_stale_days);
+
+  if (days <= activeLimit) {
+    return {
+      status: 'active',
+      days,
+      hasOverride,
+      limits: { active: activeLimit, cooling: coolingLimit, stale: staleLimit },
+      message: `Active: committed ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`} (within ${activeLimit}d limit)`
+    };
+  }
+  if (days <= coolingLimit) {
+    return {
+      status: 'cooling',
+      days,
+      hasOverride,
+      limits: { active: activeLimit, cooling: coolingLimit, stale: staleLimit },
+      message: `Cooling: ${days} days without commit (past ${activeLimit}d active, within ${coolingLimit}d cooling)`
+    };
+  }
+  if (days <= staleLimit) {
+    return {
+      status: 'stale',
+      days,
+      hasOverride,
+      limits: { active: activeLimit, cooling: coolingLimit, stale: staleLimit },
+      message: `Stale: ${days} days without commit (past ${coolingLimit}d cooling, within ${staleLimit}d stale)`
+    };
+  }
+  return {
+    status: 'dead',
+    days,
+    hasOverride,
+    limits: { active: activeLimit, cooling: coolingLimit, stale: staleLimit },
+    message: `Dormant: ${days} days without commit (exceeds ${staleLimit}d stale threshold)`
+  };
 };
 
 const DEFAULT_THRESHOLDS = { active_max_days: 7, cooling_max_days: 14, stale_max_days: 30 };
+export const DEFAULT_CATEGORIES = [
+  'Web app', 'Mobile app', 'API/service', 'Full ERP', 'SaaS',
+  'Library/package', 'CLI/tool', 'Learning/experiment', 'Client project', 'Infrastructure', 'Other'
+];
+export const DEFAULT_TAGS = [
+  'React', 'Next.js', 'Vue', 'Svelte', 'Node.js', 'Express',
+  'FastAPI', 'NestJS', 'Go', 'Rust', 'Python', 'TypeScript',
+  'PostgreSQL', 'Redis', 'Docker', 'Tailwind CSS', 'Astro'
+];
 
 export const getSettings = async () => {
   if (!db) {
     return {
       ...DEFAULT_THRESHOLDS,
+      custom_categories: DEFAULT_CATEGORIES,
+      custom_tags: DEFAULT_TAGS,
       has_github_token: Boolean(process.env.GITHUB_TOKEN),
       github_username: null
     };
   }
   try {
-    const { rows } = await db.query('SELECT active_max_days, cooling_max_days, stale_max_days, github_token, github_username FROM settings WHERE id=1');
+    const { rows } = await db.query('SELECT active_max_days, cooling_max_days, stale_max_days, github_token, github_username, custom_categories, custom_tags FROM settings WHERE id=1');
     const row = rows[0] || {};
+    const categories = Array.isArray(row.custom_categories) ? row.custom_categories : (typeof row.custom_categories === 'string' ? JSON.parse(row.custom_categories || '[]') : DEFAULT_CATEGORIES);
+    const tags = Array.isArray(row.custom_tags) ? row.custom_tags : (typeof row.custom_tags === 'string' ? JSON.parse(row.custom_tags || '[]') : DEFAULT_TAGS);
     return {
       active_max_days: row.active_max_days ?? 7,
       cooling_max_days: row.cooling_max_days ?? 14,
       stale_max_days: row.stale_max_days ?? 30,
+      custom_categories: categories?.length ? categories : DEFAULT_CATEGORIES,
+      custom_tags: tags?.length ? tags : DEFAULT_TAGS,
       has_github_token: Boolean(row.github_token || process.env.GITHUB_TOKEN),
       github_username: row.github_username || null
     };
   } catch {
     return {
       ...DEFAULT_THRESHOLDS,
+      custom_categories: DEFAULT_CATEGORIES,
+      custom_tags: DEFAULT_TAGS,
       has_github_token: Boolean(process.env.GITHUB_TOKEN),
       github_username: null
     };
   }
 };
+
 
 const getActiveGitHubToken = async () => {
   if (db) {
@@ -135,6 +201,9 @@ app.patch('/api/settings', async (req, res) => {
     const cooling = Math.max(active, parseInt(req.body.cooling_max_days ?? current.cooling_max_days, 10) || 14);
     const stale = Math.max(cooling, parseInt(req.body.stale_max_days ?? current.stale_max_days, 10) || 30);
 
+    const categories = Array.isArray(req.body.custom_categories) ? req.body.custom_categories : current.custom_categories;
+    const tags = Array.isArray(req.body.custom_tags) ? req.body.custom_tags : current.custom_tags;
+
     let tokenToStore = undefined;
     let usernameToStore = undefined;
 
@@ -153,15 +222,17 @@ app.patch('/api/settings', async (req, res) => {
 
     if (tokenToStore !== undefined) {
       await db.query(
-        `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3, github_token=$4, github_username=$5, updated_at=now()
+        `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3,
+         github_token=$4, github_username=$5, custom_categories=$6, custom_tags=$7, updated_at=now()
          WHERE id=1`,
-        [active, cooling, stale, tokenToStore, usernameToStore]
+        [active, cooling, stale, tokenToStore, usernameToStore, JSON.stringify(categories), JSON.stringify(tags)]
       );
     } else {
       await db.query(
-        `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3, updated_at=now()
+        `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3,
+         custom_categories=$4, custom_tags=$5, updated_at=now()
          WHERE id=1`,
-        [active, cooling, stale]
+        [active, cooling, stale, JSON.stringify(categories), JSON.stringify(tags)]
       );
     }
 
@@ -171,6 +242,7 @@ app.patch('/api/settings', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
 
 // Summary KPI statistics and 30-day workspace pulse
 app.get('/api/stats', async (_req, res) => {
@@ -304,6 +376,70 @@ app.get('/api/export', async (_req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Import and restore data from a JSON backup
+app.post('/api/import', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const payload = req.body;
+    if (!payload || !Array.isArray(payload.repositories)) {
+      return res.status(400).json({ error: 'Invalid backup format: repositories array is required.' });
+    }
+
+    if (payload.settings) {
+      const active = parseInt(payload.settings.active_max_days, 10) || 7;
+      const cooling = parseInt(payload.settings.cooling_max_days, 10) || 14;
+      const stale = parseInt(payload.settings.stale_max_days, 10) || 30;
+      await db.query(
+        'UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3, updated_at=now() WHERE id=1',
+        [active, cooling, stale]
+      );
+    }
+
+    let restored = 0;
+    for (const r of payload.repositories) {
+      if (!r.github_id || !r.full_name) continue;
+      await db.query(
+        `INSERT INTO repos (
+          github_id, full_name, html_url, description, language,
+          last_commit_at, commit_days, label, lifecycle_status, priority,
+          tech_stack, notes, is_favorite, is_archived,
+          custom_active_days, custom_cooling_days, custom_stale_days, synced_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())
+        ON CONFLICT (github_id) DO UPDATE SET
+          full_name=$2, html_url=$3, description=$4, language=$5,
+          last_commit_at=$6, commit_days=$7, label=$8, lifecycle_status=$9, priority=$10,
+          tech_stack=$11, notes=$12, is_favorite=$13, is_archived=$14,
+          custom_active_days=$15, custom_cooling_days=$16, custom_stale_days=$17, synced_at=now()`,
+        [
+          r.github_id,
+          r.full_name,
+          r.html_url || `https://github.com/${r.full_name}`,
+          r.description || null,
+          r.language || null,
+          r.last_commit_at || null,
+          JSON.stringify(r.commit_days || []),
+          r.label || null,
+          r.lifecycle_status || 'active',
+          r.priority || 'normal',
+          JSON.stringify(r.tech_stack || []),
+          r.notes || null,
+          Boolean(r.is_favorite),
+          Boolean(r.is_archived),
+          r.custom_active_days ? parseInt(r.custom_active_days, 10) : null,
+          r.custom_cooling_days ? parseInt(r.custom_cooling_days, 10) : null,
+          r.custom_stale_days ? parseInt(r.custom_stale_days, 10) : null
+        ]
+      );
+      restored++;
+    }
+
+    res.json({ message: `Successfully restored ${restored} repositories from backup`, count: restored });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // Sync from GitHub
 app.post('/api/sync', async (_req, res) => {
@@ -496,10 +632,17 @@ app.get('/api/repos', async (req, res) => {
     const sortBy = String(req.query.sort || 'recent').toLowerCase();
 
     let list = rows.map((r) => {
-      const computedStatus = statusOf(r.last_commit_at, Date.now(), thresholds);
+      const overrides = (r.custom_active_days || r.custom_cooling_days || r.custom_stale_days) ? {
+        custom_active_days: r.custom_active_days,
+        custom_cooling_days: r.custom_cooling_days,
+        custom_stale_days: r.custom_stale_days
+      } : null;
+      const computedStatus = statusOf(r.last_commit_at, Date.now(), thresholds, overrides);
+      const explanation = explainStatus(r.last_commit_at, Date.now(), thresholds, overrides);
       return {
         ...r,
         status: computedStatus,
+        status_explanation: explanation,
         tech_stack: Array.isArray(r.tech_stack) ? r.tech_stack : (typeof r.tech_stack === 'string' ? JSON.parse(r.tech_stack || '[]') : []),
         commit_days: Array.isArray(r.commit_days) ? r.commit_days : (typeof r.commit_days === 'string' ? JSON.parse(r.commit_days || '[]') : [])
       };
@@ -607,6 +750,18 @@ app.patch('/api/repos/:id', async (req, res) => {
     if (req.body.threshold_days !== undefined) {
       updates.push(`threshold_days=$${idx++}`);
       values.push(req.body.threshold_days ? parseInt(req.body.threshold_days, 10) : null);
+    }
+    if (req.body.custom_active_days !== undefined) {
+      updates.push(`custom_active_days=$${idx++}`);
+      values.push(req.body.custom_active_days ? parseInt(req.body.custom_active_days, 10) : null);
+    }
+    if (req.body.custom_cooling_days !== undefined) {
+      updates.push(`custom_cooling_days=$${idx++}`);
+      values.push(req.body.custom_cooling_days ? parseInt(req.body.custom_cooling_days, 10) : null);
+    }
+    if (req.body.custom_stale_days !== undefined) {
+      updates.push(`custom_stale_days=$${idx++}`);
+      values.push(req.body.custom_stale_days ? parseInt(req.body.custom_stale_days, 10) : null);
     }
 
     if (!updates.length) return res.json({ ok: true, message: 'No updates provided' });
