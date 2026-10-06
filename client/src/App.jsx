@@ -1,7 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 
 const SUGGEST_LABELS = ['Application', 'Web app', 'Full ERP', 'API/service', 'Library', 'CLI/tool', 'Client work', 'Experiment', 'Infrastructure'];
-const SUGGEST_STACKS = ['React', 'Next.js', 'Node.js', 'Express', 'NestJS', 'PostgreSQL', 'TypeScript', 'Python', 'Docker', 'Redis', 'Go'];
 
 const ago = (d) => {
   if (!d) return 'No commits recorded';
@@ -36,10 +35,98 @@ function CommitStrip({ days }) {
   );
 }
 
-function SettingsModal({ isOpen, onClose, currentSettings, onSave }) {
+function WorkspacePulse({ dailyPulse, total30d, recent7d }) {
+  const safePulse = Array.isArray(dailyPulse) && dailyPulse.length === 30 ? dailyPulse : Array(30).fill(0);
+  const max = Math.max(1, ...safePulse);
+
+  return (
+    <div className="workspace-pulse-card">
+      <div className="pulse-header">
+        <h3>
+          <span>📈 30-Day Workspace Pulse</span>
+        </h3>
+        <span className="pulse-stats-snippet">
+          {recent7d || 0} commits in last 7 days • {total30d || 0} total in 30 days
+        </span>
+      </div>
+
+      <div className="aggregate-strip" role="img" aria-label="30-day aggregate commit volume">
+        {safePulse.map((n, i) => {
+          const count = Number(n) || 0;
+          return (
+            <i
+              key={i}
+              className={count ? '' : 'zero'}
+              title={`Day ${30 - i} ago: ${count} total commit${count === 1 ? '' : 's'} across workspace`}
+              style={{ height: count ? `${Math.max(14, Math.min(100, (count / max) * 100))}%` : 2 }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="pulse-footer">
+        <span>30 days ago</span>
+        <span>15 days ago</span>
+        <span>Today</span>
+      </div>
+    </div>
+  );
+}
+
+function ReviewNextSection({ items, onSelectRepo, onQuickAction }) {
+  if (!items || !items.length) return null;
+
+  return (
+    <div className="review-next-container">
+      <div className="review-next-header">
+        <h3>🔍 Next to Review ({items.length})</h3>
+        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Prioritized by inactivity & importance</span>
+      </div>
+      <div className="review-items-grid">
+        {items.map((item) => (
+          <div className="review-item" key={item.github_id}>
+            <div>
+              <a
+                href={item.html_url}
+                target="_blank"
+                rel="noreferrer"
+                className="review-item-name"
+              >
+                {item.full_name}
+              </a>
+              <p className="review-item-reason">{item.reason}</p>
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="review-item-action"
+                onClick={() => onSelectRepo(item.github_id)}
+              >
+                Open notes
+              </button>
+              {item.lifecycle_status !== 'paused' && (
+                <button
+                  type="button"
+                  className="review-item-action"
+                  onClick={() => onQuickAction(item.github_id, { lifecycle_status: 'paused' })}
+                >
+                  Pause
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingsModal({ isOpen, onClose, currentSettings, onSave, onExport, onClearData }) {
   const [active, setActive] = useState(currentSettings.active_max_days ?? 7);
   const [cooling, setCooling] = useState(currentSettings.cooling_max_days ?? 14);
   const [stale, setStale] = useState(currentSettings.stale_max_days ?? 30);
+  const [tokenInput, setTokenInput] = useState('');
+  const [tokenMsg, setTokenMsg] = useState('');
 
   useEffect(() => {
     setActive(currentSettings.active_max_days ?? 7);
@@ -51,18 +138,30 @@ function SettingsModal({ isOpen, onClose, currentSettings, onSave }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ active_max_days: Number(active), cooling_max_days: Number(cooling), stale_max_days: Number(stale) });
+    const payload = {
+      active_max_days: Number(active),
+      cooling_max_days: Number(cooling),
+      stale_max_days: Number(stale)
+    };
+    if (tokenInput.trim()) {
+      payload.github_token = tokenInput.trim();
+    }
+    onSave(payload);
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Inactivity Thresholds</h3>
+          <h3>Settings & Preferences</h3>
           <button type="button" className="text-btn" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div className="form-group" style={{ marginBottom: 12 }}>
+          <h4 style={{ margin: '0 0 8px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-soft)' }}>
+            Inactivity Boundaries
+          </h4>
+
+          <div className="form-group" style={{ marginBottom: 10 }}>
             <label htmlFor="active-days">Active threshold (days)</label>
             <input
               id="active-days"
@@ -73,10 +172,10 @@ function SettingsModal({ isOpen, onClose, currentSettings, onSave }) {
               value={active}
               onChange={(e) => setActive(e.target.value)}
             />
-            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Repositories with commits within 0 to {active} days are marked Active.</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Committed within 0 to {active} days = Active.</span>
           </div>
 
-          <div className="form-group" style={{ marginBottom: 12 }}>
+          <div className="form-group" style={{ marginBottom: 10 }}>
             <label htmlFor="cooling-days">Cooling threshold (days)</label>
             <input
               id="cooling-days"
@@ -87,7 +186,7 @@ function SettingsModal({ isOpen, onClose, currentSettings, onSave }) {
               value={cooling}
               onChange={(e) => setCooling(e.target.value)}
             />
-            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Repositories without commits between {Number(active) + 1} and {cooling} days are marked Cooling.</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>No commits in {Number(active) + 1}–{cooling} days = Cooling.</span>
           </div>
 
           <div className="form-group" style={{ marginBottom: 16 }}>
@@ -101,12 +200,49 @@ function SettingsModal({ isOpen, onClose, currentSettings, onSave }) {
               value={stale}
               onChange={(e) => setStale(e.target.value)}
             />
-            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Repositories without commits between {Number(cooling) + 1} and {stale} days are Stale; past {stale} days is Dead.</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>No commits in {Number(cooling) + 1}–{stale} days = Stale; past {stale} days = Dead.</span>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '16px 0' }} />
+
+          <h4 style={{ margin: '0 0 8px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-soft)' }}>
+            GitHub Connection
+          </h4>
+
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label htmlFor="gh-token">Personal Access Token (optional)</label>
+            <input
+              id="gh-token"
+              className="form-input"
+              type="password"
+              placeholder={currentSettings.has_github_token ? "Token configured (type new token to update)" : "ghp_..."}
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+            />
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+              {currentSettings.github_username
+                ? `Connected as @${currentSettings.github_username}`
+                : (currentSettings.has_github_token ? 'Configured via server environment or settings.' : 'Needs read repository access (repo scope).')}
+            </span>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '16px 0' }} />
+
+          <h4 style={{ margin: '0 0 8px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-soft)' }}>
+            Data Management
+          </h4>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button type="button" onClick={onExport}>
+              📥 Export JSON Backup
+            </button>
+            <button type="button" style={{ color: 'var(--stale)' }} onClick={onClearData}>
+              🗑️ Clear Repositories
+            </button>
           </div>
 
           <div className="modal-actions">
             <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary">Save thresholds</button>
+            <button type="submit" className="primary">Save changes</button>
           </div>
         </form>
       </div>
@@ -116,8 +252,9 @@ function SettingsModal({ isOpen, onClose, currentSettings, onSave }) {
 
 export default function App() {
   const [repos, setRepos] = useState([]);
-  const [stats, setStats] = useState({ total: 0, active: 0, cooling: 0, stale: 0, dead: 0, paused: 0, favorites: 0 });
-  const [settings, setSettings] = useState({ active_max_days: 7, cooling_max_days: 14, stale_max_days: 30 });
+  const [stats, setStats] = useState({ total: 0, active: 0, cooling: 0, stale: 0, dead: 0, paused: 0, favorites: 0, daily_pulse: [], total_30d_commits: 0, recent_7d_commits: 0 });
+  const [reviewNext, setReviewNext] = useState([]);
+  const [settings, setSettings] = useState({ active_max_days: 7, cooling_max_days: 14, stale_max_days: 30, has_github_token: false, github_username: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -127,6 +264,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [theme, setTheme] = useState('light');
+
+  const searchInputRef = useRef(null);
 
   const groups = useMemo(() => [
     { key: 'active', name: 'Active', meaning: `Committed in the last ${settings.active_max_days} days`, color: 'var(--active)' },
@@ -142,15 +281,17 @@ export default function App() {
       if (sortBy) q.set('sort', sortBy);
       if (showArchived) q.set('archived', 'true');
 
-      const [reposRes, statsRes, settingsRes] = await Promise.all([
+      const [reposRes, statsRes, settingsRes, reviewRes] = await Promise.all([
         fetch(`/api/repos?${q.toString()}`),
         fetch('/api/stats'),
-        fetch('/api/settings')
+        fetch('/api/settings'),
+        fetch('/api/review-next')
       ]);
 
       if (reposRes.ok) setRepos(await reposRes.json());
       if (statsRes.ok) setStats(await statsRes.json());
       if (settingsRes.ok) setSettings(await settingsRes.json());
+      if (reviewRes.ok) setReviewNext(await reviewRes.json());
     } catch {
       setError('Cannot connect to RepoPulse API. Verify server status.');
     }
@@ -159,6 +300,26 @@ export default function App() {
   useEffect(() => {
     loadData();
   }, [search, sortBy, showArchived]);
+
+  // Global Keyboard Shortcuts: '/' for search, 'Esc' to clear/close
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'Escape') {
+        if (settingsOpen) {
+          setSettingsOpen(false);
+        } else if (search) {
+          setSearch('');
+        } else if (statusFilter !== 'all') {
+          setStatusFilter('all');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settingsOpen, search, statusFilter]);
 
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light';
@@ -173,7 +334,7 @@ export default function App() {
       const res = await fetch('/api/sync', { method: 'POST' });
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || 'GitHub sync failed. Check GITHUB_TOKEN.');
+        setError(data.error || 'GitHub sync failed. Check GITHUB_TOKEN in Settings.');
       }
     } catch {
       setError('Failed to contact sync service.');
@@ -209,9 +370,27 @@ export default function App() {
         setSettings(await res.json());
         setSettingsOpen(false);
         await loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to update settings');
       }
     } catch {
-      setError('Failed to update thresholds');
+      setError('Failed to update settings');
+    }
+  };
+
+  const handleExportBackup = () => {
+    window.open('/api/export', '_blank');
+  };
+
+  const handleClearData = async () => {
+    if (!window.confirm('Are you sure you want to clear all repository data? This will reset the ledger.')) return;
+    try {
+      await fetch('/api/repos', { method: 'DELETE' });
+      await loadData();
+      setSettingsOpen(false);
+    } catch {
+      setError('Failed to clear data');
     }
   };
 
@@ -224,15 +403,18 @@ export default function App() {
       });
       if (res.ok) {
         setRepos(prev => prev.map(r => r.github_id === id ? { ...r, ...patch } : r));
-        const statsRes = await fetch('/api/stats');
+        const [statsRes, reviewRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/review-next')
+        ]);
         if (statsRes.ok) setStats(await statsRes.json());
+        if (reviewRes.ok) setReviewNext(await reviewRes.json());
       }
     } catch {
       setError('Failed to save repository update');
     }
   };
 
-  // Filtered list based on KPI / status filter selection
   const filteredRepos = useMemo(() => {
     if (statusFilter === 'all') return repos;
     if (statusFilter === 'favorites') return repos.filter(r => r.is_favorite);
@@ -255,8 +437,8 @@ export default function App() {
           <button type="button" onClick={toggleTheme} title="Toggle light/dark theme">
             {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
           </button>
-          <button type="button" onClick={() => setSettingsOpen(true)} title="Configure Inactivity Thresholds">
-            ⚙️ Thresholds ({settings.active_max_days}/{settings.cooling_max_days}/{settings.stale_max_days}d)
+          <button type="button" onClick={() => setSettingsOpen(true)} title="Configure Inactivity Thresholds & Token">
+            ⚙️ Settings ({settings.active_max_days}/{settings.cooling_max_days}/{settings.stale_max_days}d)
           </button>
           <button type="button" onClick={handleSeedDemo} disabled={busy} title="Load sample repositories to evaluate features">
             🧪 Demo seed
@@ -299,12 +481,33 @@ export default function App() {
         </div>
       </div>
 
+      {/* 30-Day Workspace Pulse Activity Chart */}
+      {repos.length > 0 && (
+        <WorkspacePulse
+          dailyPulse={stats.daily_pulse}
+          total30d={stats.total_30d_commits}
+          recent7d={stats.recent_7d_commits}
+        />
+      )}
+
+      {/* "Next to Review" Prioritized Recommendations */}
+      <ReviewNextSection
+        items={reviewNext}
+        onSelectRepo={(id) => {
+          setExpandedId(id);
+          const el = document.getElementById(`repo-${id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
+        onQuickAction={updateRepo}
+      />
+
       {/* Toolbar: Search, Sort, Archived Toggle */}
       <div className="toolbar">
         <input
+          ref={searchInputRef}
           type="search"
           className="search-input"
-          placeholder="Filter by name, description, stack, or label..."
+          placeholder="Filter by name, description, stack, or label... (press '/' to focus)"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search repositories"
@@ -340,7 +543,7 @@ export default function App() {
 
       {error && (
         <div className="banner error" role="alert">
-          <strong>Error:</strong> {error}
+          <strong>Notice:</strong> {error}
         </div>
       )}
 
@@ -351,7 +554,7 @@ export default function App() {
           <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 13 }}>
             {search || statusFilter !== 'all'
               ? 'Try adjusting your search query or filter selection.'
-              : 'Add your GITHUB_TOKEN in server/.env or click "Demo seed" to evaluate the dashboard with realistic sample data.'}
+              : 'Add your GITHUB_TOKEN in Settings or click "Demo seed" to evaluate the dashboard with realistic sample data.'}
           </p>
           {!repos.length && (
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
@@ -386,7 +589,7 @@ export default function App() {
               const stackTags = Array.isArray(r.tech_stack) ? r.tech_stack : [];
 
               return (
-                <article className="row" key={r.github_id} style={{ '--c': g.color }}>
+                <article className="row" key={r.github_id} id={`repo-${r.github_id}`} style={{ '--c': g.color }}>
                   <div className="row-main">
                     <div className="repo-info">
                       <div className="repo-title-line">
@@ -517,6 +720,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         currentSettings={settings}
         onSave={handleSaveSettings}
+        onExport={handleExportBackup}
+        onClearData={handleClearData}
       />
     </main>
   );

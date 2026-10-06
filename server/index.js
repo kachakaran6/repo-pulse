@@ -52,18 +52,46 @@ export const statusOf = (lastCommitAt, now = Date.now(), thresholds = { active: 
 const DEFAULT_THRESHOLDS = { active_max_days: 7, cooling_max_days: 14, stale_max_days: 30 };
 
 export const getSettings = async () => {
-  if (!db) return DEFAULT_THRESHOLDS;
+  if (!db) {
+    return {
+      ...DEFAULT_THRESHOLDS,
+      has_github_token: Boolean(process.env.GITHUB_TOKEN),
+      github_username: null
+    };
+  }
   try {
-    const { rows } = await db.query('SELECT active_max_days, cooling_max_days, stale_max_days FROM settings WHERE id=1');
-    return rows[0] || DEFAULT_THRESHOLDS;
+    const { rows } = await db.query('SELECT active_max_days, cooling_max_days, stale_max_days, github_token, github_username FROM settings WHERE id=1');
+    const row = rows[0] || {};
+    return {
+      active_max_days: row.active_max_days ?? 7,
+      cooling_max_days: row.cooling_max_days ?? 14,
+      stale_max_days: row.stale_max_days ?? 30,
+      has_github_token: Boolean(row.github_token || process.env.GITHUB_TOKEN),
+      github_username: row.github_username || null
+    };
   } catch {
-    return DEFAULT_THRESHOLDS;
+    return {
+      ...DEFAULT_THRESHOLDS,
+      has_github_token: Boolean(process.env.GITHUB_TOKEN),
+      github_username: null
+    };
   }
 };
 
-const gh = async (path) => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error('GITHUB_TOKEN not configured in server environment.');
+const getActiveGitHubToken = async () => {
+  if (db) {
+    try {
+      const { rows } = await db.query('SELECT github_token FROM settings WHERE id=1');
+      if (rows[0]?.github_token) return rows[0].github_token;
+    } catch {
+      // ignore
+    }
+  }
+  return process.env.GITHUB_TOKEN || null;
+};
+
+const ghWithToken = async (path, token) => {
+  if (!token) throw new Error('GITHUB_TOKEN not configured in server environment or settings.');
   const res = await fetch(`https://api.github.com${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
   });
@@ -71,10 +99,15 @@ const gh = async (path) => {
     const reset = res.headers.get('x-ratelimit-reset');
     throw new Error(`GitHub rate limit hit. Try again at ${new Date(reset * 1000).toLocaleTimeString()}.`);
   }
-  if (res.status === 401) throw new Error('GitHub rejected the token. Check GITHUB_TOKEN in server/.env.');
+  if (res.status === 401) throw new Error('GitHub rejected the token. Ensure it has repo read permissions.');
   if (res.status === 409) return []; // empty repo
   if (!res.ok) throw new Error(`GitHub returned ${res.status} for ${path}`);
   return res.json();
+};
+
+const gh = async (path) => {
+  const token = await getActiveGitHubToken();
+  return ghWithToken(path, token);
 };
 
 const DAYS = 30;
@@ -95,23 +128,51 @@ app.get('/api/settings', async (_req, res) => {
 
 app.patch('/api/settings', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not configured' });
-  const active = Math.max(1, parseInt(req.body.active_max_days, 10) || 7);
-  const cooling = Math.max(active, parseInt(req.body.cooling_max_days, 10) || 14);
-  const stale = Math.max(cooling, parseInt(req.body.stale_max_days, 10) || 30);
 
   try {
-    const { rows } = await db.query(
-      `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3, updated_at=now()
-       WHERE id=1 RETURNING active_max_days, cooling_max_days, stale_max_days`,
-      [active, cooling, stale]
-    );
-    res.json(rows[0] || { active_max_days: active, cooling_max_days: cooling, stale_max_days: stale });
+    const current = await getSettings();
+    const active = Math.max(1, parseInt(req.body.active_max_days ?? current.active_max_days, 10) || 7);
+    const cooling = Math.max(active, parseInt(req.body.cooling_max_days ?? current.cooling_max_days, 10) || 14);
+    const stale = Math.max(cooling, parseInt(req.body.stale_max_days ?? current.stale_max_days, 10) || 30);
+
+    let tokenToStore = undefined;
+    let usernameToStore = undefined;
+
+    if (req.body.github_token !== undefined) {
+      const candidate = String(req.body.github_token ?? '').trim();
+      if (candidate) {
+        // Validate with GitHub
+        const me = await ghWithToken('/user', candidate);
+        tokenToStore = candidate;
+        usernameToStore = me.login || null;
+      } else {
+        tokenToStore = null;
+        usernameToStore = null;
+      }
+    }
+
+    if (tokenToStore !== undefined) {
+      await db.query(
+        `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3, github_token=$4, github_username=$5, updated_at=now()
+         WHERE id=1`,
+        [active, cooling, stale, tokenToStore, usernameToStore]
+      );
+    } else {
+      await db.query(
+        `UPDATE settings SET active_max_days=$1, cooling_max_days=$2, stale_max_days=$3, updated_at=now()
+         WHERE id=1`,
+        [active, cooling, stale]
+      );
+    }
+
+    const updated = await getSettings();
+    res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
-// Summary KPI statistics
+// Summary KPI statistics and 30-day workspace pulse
 app.get('/api/stats', async (_req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not configured' });
   try {
@@ -120,6 +181,8 @@ app.get('/api/stats', async (_req, res) => {
     const { rows } = await db.query('SELECT * FROM repos');
 
     let active = 0, cooling = 0, stale = 0, dead = 0, paused = 0, favorites = 0, archived = 0;
+    const dailyPulse = Array(DAYS).fill(0);
+
     for (const r of rows) {
       if (r.is_archived) { archived++; continue; }
       if (r.lifecycle_status === 'paused') { paused++; }
@@ -129,7 +192,17 @@ app.get('/api/stats', async (_req, res) => {
       else if (st === 'cooling') cooling++;
       else if (st === 'stale') stale++;
       else dead++;
+
+      const daysArr = Array.isArray(r.commit_days) ? r.commit_days : (typeof r.commit_days === 'string' ? JSON.parse(r.commit_days || '[]') : []);
+      if (Array.isArray(daysArr)) {
+        for (let i = 0; i < Math.min(DAYS, daysArr.length); i++) {
+          dailyPulse[i] += Number(daysArr[i]) || 0;
+        }
+      }
     }
+
+    const total30d = dailyPulse.reduce((a, b) => a + b, 0);
+    const last7d = dailyPulse.slice(-7).reduce((a, b) => a + b, 0);
 
     res.json({
       total: rows.length,
@@ -140,7 +213,92 @@ app.get('/api/stats', async (_req, res) => {
       paused,
       favorites,
       archived,
-      thresholds
+      thresholds,
+      daily_pulse: dailyPulse,
+      total_30d_commits: total30d,
+      recent_7d_commits: last7d
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// "Review Next" smart recommendation algorithm
+app.get('/api/review-next', async (_req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const settings = await getSettings();
+    const thresholds = { active: settings.active_max_days, cooling: settings.cooling_max_days, stale: settings.stale_max_days };
+    const { rows } = await db.query('SELECT * FROM repos WHERE is_archived=FALSE');
+
+    const candidates = [];
+    const now = Date.now();
+
+    for (const r of rows) {
+      const days = r.last_commit_at ? Math.floor((now - new Date(r.last_commit_at)) / 864e5) : 999;
+      const st = statusOf(r.last_commit_at, now, thresholds);
+
+      let urgency = 0;
+      let reason = '';
+
+      if (r.lifecycle_status === 'needs_review') {
+        urgency += 100;
+        reason = 'Flagged manually as "Needs review"';
+      } else if (r.priority === 'high' && (st === 'stale' || st === 'dead')) {
+        urgency += 90;
+        reason = `High priority project inactive for ${days > 365 ? '1+ year' : `${days} days`}`;
+      } else if (r.priority === 'high' && st === 'cooling') {
+        urgency += 75;
+        reason = `High priority project cooling off (${days} days without commit)`;
+      } else if (r.lifecycle_status === 'paused' && days > 60) {
+        urgency += 40;
+        reason = `Paused for over ${days} days; consider archiving or restarting`;
+      } else if (st === 'stale' && r.priority === 'normal') {
+        urgency += 30;
+        reason = `Normal priority project inactive for ${days} days`;
+      } else if (st === 'dead' && r.priority === 'normal') {
+        urgency += 25;
+        reason = `Inactive for over ${thresholds.stale} days`;
+      }
+
+      if (urgency > 0) {
+        candidates.push({
+          github_id: r.github_id,
+          full_name: r.full_name,
+          html_url: r.html_url,
+          status: st,
+          priority: r.priority,
+          lifecycle_status: r.lifecycle_status,
+          days_ago: days,
+          urgency,
+          reason
+        });
+      }
+    }
+
+    candidates.sort((a, b) => b.urgency - a.urgency);
+    res.json(candidates.slice(0, 4));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export all data as backup
+app.get('/api/export', async (_req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const settings = await getSettings();
+    const { rows } = await db.query('SELECT * FROM repos ORDER BY last_commit_at DESC NULLS LAST');
+    res.setHeader('Content-Disposition', 'attachment; filename="repopulse-backup.json"');
+    res.json({
+      exported_at: new Date().toISOString(),
+      settings: {
+        active_max_days: settings.active_max_days,
+        cooling_max_days: settings.cooling_max_days,
+        stale_max_days: settings.stale_max_days
+      },
+      repositories_count: rows.length,
+      repositories: rows
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -249,10 +407,10 @@ app.post('/api/demo-seed', async (_req, res) => {
         commits: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0],
         label: 'API/service',
         lifecycle: 'paused',
-        priority: 'normal',
+        priority: 'high',
         stack: ['Node.js', 'Socket.IO', 'Redis'],
         fav: false,
-        notes: 'Paused while focusing on RepoPulse.'
+        notes: 'High priority service paused while focusing on RepoPulse.'
       },
       {
         id: 106,
