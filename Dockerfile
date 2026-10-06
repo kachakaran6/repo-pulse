@@ -4,8 +4,10 @@
 FROM node:20-alpine AS client-builder
 WORKDIR /app/client
 
+ENV NODE_ENV=development
+
 COPY client/package*.json ./
-RUN npm ci || npm install
+RUN npm install --include=dev
 
 COPY client/ ./
 RUN npm run build
@@ -18,7 +20,7 @@ ENV NODE_ENV=production
 ENV PORT=4000
 
 COPY server/package*.json ./
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN npm install --omit=dev
 
 COPY server/ ./
 COPY --from=client-builder /app/client/dist ./public
