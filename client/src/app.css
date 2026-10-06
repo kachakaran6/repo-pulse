@@ -1,0 +1,28 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--chalk); color: var(--ink); font: 400 15px/1.5 var(--font); }
+main { max-width: 960px; margin: 0 auto; padding: var(--s4) var(--s3); }
+header { display: flex; justify-content: space-between; align-items: end; gap: var(--s3); margin-bottom: var(--s4); }
+h1 { font-size: 28px; line-height: 1.2; margin: 0; font-weight: 700; }
+header p { margin: var(--s1) 0 0; color: var(--ink-soft); }
+button, input { font: inherit; color: inherit; }
+.primary { background: var(--ink); color: var(--surface); border: 0; border-radius: 3px; padding: var(--s2) var(--s3); cursor: pointer; }
+.primary:disabled { opacity: .6; cursor: progress; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.error { border: 1px solid var(--stale); background: var(--surface); padding: var(--s2) var(--s3); border-radius: 3px; margin-bottom: var(--s3); }
+.group { margin-bottom: var(--s4); }
+.group h2 { font-size: 18px; margin: 0; display: flex; gap: var(--s2); align-items: baseline; }
+.group h2 b { color: var(--c); font-weight: 700; }
+.meaning { margin: 0 0 var(--s2); color: var(--ink-soft); font-size: 13px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: var(--s3); align-items: center; background: var(--surface);
+  border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 3px; padding: var(--s2) var(--s3); margin-bottom: var(--s1); }
+.name { font-family: var(--mono); font-size: 13px; color: var(--ink); text-decoration: none; font-weight: 500; }
+.name:hover { text-decoration: underline; }
+.meta { color: var(--ink-soft); font-size: 13px; display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 0 var(--s2); background: transparent; font-size: 13px; cursor: pointer; }
+.chip.empty { color: var(--ink-soft); border-style: dashed; }
+.chip-input { border: 1px solid var(--ink); border-radius: 999px; padding: 0 var(--s2); width: 130px; background: var(--surface); font-size: 13px; }
+.strip { display: flex; align-items: end; gap: 2px; height: 28px; }
+.strip i { width: 5px; background: var(--c); }
+.strip i.zero { background: var(--line); }
+.empty-state { background: var(--surface); border: 1px dashed var(--line); padding: var(--s4); border-radius: 3px; }
+@media (max-width: 640px) { .row { grid-template-columns: 1fr; } header { flex-direction: column; align-items: start; } }

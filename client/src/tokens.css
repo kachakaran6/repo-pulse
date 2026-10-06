@@ -1,0 +1,6 @@
+:root {
+  --chalk: #ECEFF2; --surface: #F8F9FA; --ink: #17212B; --ink-soft: #5B6672; --line: #CDD3DA;
+  --active: #0E7C7B; --cooling: #B7852F; --stale: #A8603A; --dead: #8B94A0;
+  --font: 'Schibsted Grotesk', system-ui, sans-serif; --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --s1: 4px; --s2: 8px; --s3: 16px; --s4: 32px;
+}
