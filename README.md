@@ -39,26 +39,27 @@ RepoPulse v3 uses a strictly disciplined design system built on **heat as the si
 
 ## 🚀 Quick Start (Local Development)
 
-### 1. Start Server
+### 1. Database & Migrations
 ```bash
-cd server
-npm install
-npm run dev
-```
-*Note: If PostgreSQL is not configured in `.env`, the server automatically starts a zero-config in-memory tenant database.*
+# 1. Start PostgreSQL
+docker compose up -d db
 
-### 2. Start Client
-```bash
-cd client
-npm install
-npm run dev
+# 2. Run migrations
+npm run db:migrate
 ```
 
-### 3. Open Demo Mode
-Open the following URL in your browser for instant demo access:
+### 2. Start Application
+```bash
+# Start backend server (port 4000)
+npm run dev:server
+
+# Start Vite frontend (port 5173 with proxy to 4000)
+npm run dev:client
 ```
-http://localhost:5173/?auth_demo=true
-```
+
+### 3. Local Authentication
+- **Sign in with GitHub:** Uses your registered GitHub App OAuth credentials.
+- **Dev Login (Local Mode):** When `DEV_LOGIN_ENABLED=true` and `NODE_ENV !== 'production'`, click "Dev login (local mode)" on the landing page or trigger `POST /auth/dev-login`. It is strictly blocked from running in production.
 
 ---
 
