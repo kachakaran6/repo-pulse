@@ -1,4 +1,5 @@
 :root {
+  /* Light Theme Tokens (Default) */
   --chalk: #ECEFF2;
   --surface: #F8F9FA;
   --surface-muted: #F2F5F8;
@@ -9,32 +10,55 @@
   --cooling: #B7852F;
   --stale: #A8603A;
   --dead: #8B94A0;
-  --font: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+
+  /* Typography */
+  --font: 'Schibsted Grotesk', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Spacing */
   --s1: 4px;
   --s2: 8px;
   --s3: 16px;
-  --s4: 32px;
+  --s4: 24px;
+  --s5: 32px;
+  --s6: 48px;
+
+  /* Radii */
+  --r-sm: 3px;
+  --r-pill: 999px;
+
+  /* Animation */
+  --transition: 150ms ease;
 }
 
+/* System Dark Mode */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --chalk: #0B1015;
-    --surface: #131A21;
-    --surface-muted: #192129;
-    --ink: #F1F5F8;
-    --ink-soft: #929DA8;
-    --line: #27313A;
+    --chalk: #12181F;
+    --surface: #1A222B;
+    --surface-muted: #222C38;
+    --ink: #E6EAEE;
+    --ink-soft: #98A3AF;
+    --line: #2B3641;
+    --active: #3FB5B3;
+    --cooling: #D9A94E;
+    --stale: #D58A5E;
+    --dead: #7C8692;
   }
 }
 
+/* Manual Theme Overrides */
 [data-theme="dark"] {
-  --chalk: #0B1015;
-  --surface: #131A21;
-  --surface-muted: #192129;
-  --ink: #F1F5F8;
-  --ink-soft: #929DA8;
-  --line: #27313A;
+  --chalk: #12181F;
+  --surface: #1A222B;
+  --surface-muted: #222C38;
+  --ink: #E6EAEE;
+  --ink-soft: #98A3AF;
+  --line: #2B3641;
+  --active: #3FB5B3;
+  --cooling: #D9A94E;
+  --stale: #D58A5E;
+  --dead: #7C8692;
 }
 
 [data-theme="light"] {
@@ -44,4 +68,8 @@
   --ink: #17212B;
   --ink-soft: #5B6672;
   --line: #CDD3DA;
+  --active: #0E7C7B;
+  --cooling: #B7852F;
+  --stale: #A8603A;
+  --dead: #8B94A0;
 }
