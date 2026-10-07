@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint, Test & Typecheck
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: repopulse_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install Server Dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Typecheck & Build Server
+        run: npm run build
+        working-directory: server
+
+      - name: Run Backend Tests
+        run: npm test
+        working-directory: server
+        env:
+          NODE_ENV: test
+          SESSION_SECRET: test_session_secret_32_characters_long_val
+          COOKIE_SECRET: test_cookie_secret_32_characters_long_val
+
+      - name: Install Client Dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Typecheck & Build Client
+        run: npm run build
+        working-directory: client
+
+      - name: Secret Scan (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
