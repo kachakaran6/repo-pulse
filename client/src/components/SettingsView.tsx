@@ -7,8 +7,6 @@ interface SettingsViewProps {
   onUpdateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
   onExportData: () => void;
   onDeleteAccount: () => Promise<void>;
-  onSync: () => Promise<void>;
-  isSyncing: boolean;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -17,8 +15,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateSettings,
   onExportData,
   onDeleteAccount,
-  onSync,
-  isSyncing,
 }) => {
   const [activeDays, setActiveDays] = useState(settings.active_days);
   const [coolingDays, setCoolingDays] = useState(settings.cooling_days);
@@ -31,16 +27,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Determine if threshold values changed from saved settings
+  const hasThresholdsChanged =
+    activeDays !== settings.active_days ||
+    coolingDays !== settings.cooling_days ||
+    staleDays !== settings.stale_days;
+
   const handleSaveThresholds = async (e: React.FormEvent) => {
     e.preventDefault();
     setThresholdError(null);
 
     if (activeDays >= coolingDays) {
-      setThresholdError('Active days must be strictly less than cooling days.');
+      setThresholdError('Active days must be less than Cooling days.');
       return;
     }
     if (coolingDays >= staleDays) {
-      setThresholdError('Cooling days must be strictly less than stale days.');
+      setThresholdError('Cooling days must be less than Stale days.');
       return;
     }
 
@@ -52,7 +54,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         stale_days: staleDays,
       });
     } catch (err: any) {
-      setThresholdError(err.message || 'Failed to update thresholds');
+      setThresholdError(err.message || 'Failed to save thresholds');
     } finally {
       setIsSaving(false);
     }
@@ -76,187 +78,173 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div>
-      {/* 1. Thresholds Settings */}
-      <section className="settings-section">
-        <h2 className="settings-heading">Activity Status Thresholds</h2>
-        <p className="settings-desc">
-          Customize the days without commits before a repository transitions from Active to Cooling, Stale, and Dead.
+    <div className="settings-ledger">
+      <div style={{ paddingBottom: '16px', borderBottom: '1px solid var(--line)' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>
+          Settings
+        </h1>
+        <p style={{ fontSize: '14px', color: 'var(--ink-2)' }}>
+          Configure repository activity thresholds, appearance preferences, and data portability.
         </p>
+      </div>
 
-        <form onSubmit={handleSaveThresholds}>
-          <div className="form-group-row">
-            <div className="form-field">
-              <label className="form-label" htmlFor="active-threshold-input">Active (days)</label>
-              <input
-                id="active-threshold-input"
-                type="number"
-                min={1}
-                max={90}
-                className="form-input"
-                value={activeDays}
-                onChange={(e) => setActiveDays(Number(e.target.value))}
-              />
-              <span style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
-                0 to {activeDays} days
-              </span>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor="cooling-threshold-input">Cooling (days)</label>
-              <input
-                id="cooling-threshold-input"
-                type="number"
-                min={2}
-                max={180}
-                className="form-input"
-                value={coolingDays}
-                onChange={(e) => setCoolingDays(Number(e.target.value))}
-              />
-              <span style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
-                {activeDays + 1} to {coolingDays} days
-              </span>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor="stale-threshold-input">Stale (days)</label>
-              <input
-                id="stale-threshold-input"
-                type="number"
-                min={3}
-                max={365}
-                className="form-input"
-                value={staleDays}
-                onChange={(e) => setStaleDays(Number(e.target.value))}
-              />
-              <span style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
-                {coolingDays + 1} to {staleDays} days
-              </span>
-            </div>
+      {/* Row 1: Status Thresholds as an Inline Sentence */}
+      <form onSubmit={handleSaveThresholds} className="settings-row">
+        <div className="settings-meta">
+          <div className="settings-label">Activity Thresholds</div>
+          <div className="settings-desc">
+            Controls how days of inactivity group repositories across the temperature scale.
           </div>
-
           {thresholdError && (
-            <div style={{ color: 'var(--stale)', fontSize: '13px', marginBottom: '12px' }}>
+            <div style={{ color: 'var(--heat-active)', fontSize: '13px', marginTop: '4px' }}>
               {thresholdError}
             </div>
           )}
+        </div>
 
-          <button type="submit" className="btn-primary" disabled={isSaving}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+          <div className="threshold-sentence">
+            <span>Active up to</span>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              className="inline-num-input"
+              value={activeDays}
+              onChange={(e) => setActiveDays(Number(e.target.value))}
+            />
+            <span>days, Cooling up to</span>
+            <input
+              type="number"
+              min={2}
+              max={180}
+              className="inline-num-input"
+              value={coolingDays}
+              onChange={(e) => setCoolingDays(Number(e.target.value))}
+            />
+            <span>, Stale up to</span>
+            <input
+              type="number"
+              min={3}
+              max={365}
+              className="inline-num-input"
+              value={staleDays}
+              onChange={(e) => setStaleDays(Number(e.target.value))}
+            />
+            <span>. After that: Dead.</span>
+          </div>
+
+          <button
+            type="submit"
+            className="btn-ink"
+            style={{ fontSize: '13px', padding: '6px 14px' }}
+            disabled={!hasThresholdsChanged || isSaving}
+          >
             {isSaving ? 'Saving...' : 'Save thresholds'}
           </button>
-        </form>
-      </section>
+        </div>
+      </form>
 
-      {/* 2. Theme Preferences */}
-      <section className="settings-section">
-        <h2 className="settings-heading">Theme & Appearance</h2>
-        <p className="settings-desc">
-          Choose your interface theme. System option follows your OS color preference.
-        </p>
+      {/* Row 2: Theme Segmented Control */}
+      <div className="settings-row">
+        <div className="settings-meta">
+          <div className="settings-label">Appearance Theme</div>
+          <div className="settings-desc">
+            Select light, dark, or follow your operating system default.
+          </div>
+        </div>
 
-        <div className="theme-options">
+        <div className="segmented-control" role="group" aria-label="Theme selection">
           <button
             type="button"
-            className={`theme-btn ${theme === 'system' ? 'active' : ''}`}
+            className={`segmented-btn ${theme === 'system' ? 'active' : ''}`}
             onClick={() => handleThemeChange('system')}
           >
             System
           </button>
           <button
             type="button"
-            className={`theme-btn ${theme === 'light' ? 'active' : ''}`}
+            className={`segmented-btn ${theme === 'light' ? 'active' : ''}`}
             onClick={() => handleThemeChange('light')}
           >
             Light
           </button>
           <button
             type="button"
-            className={`theme-btn ${theme === 'dark' ? 'active' : ''}`}
+            className={`segmented-btn ${theme === 'dark' ? 'active' : ''}`}
             onClick={() => handleThemeChange('dark')}
           >
             Dark
           </button>
         </div>
-      </section>
+      </div>
 
-      {/* 3. GitHub Connection */}
-      <section className="settings-section">
-        <h2 className="settings-heading">GitHub Connection</h2>
-        <p className="settings-desc">
-          RepoPulse reads repository metadata and commit frequencies through short-lived installation tokens.
-        </p>
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '14px' }}>
-              {installation.connected
-                ? `Connected to GitHub Account: ${installation.account_login}`
-                : 'Connected in Developer Mode'}
-            </div>
-            <div style={{ fontSize: '13px', color: 'var(--ink-soft)', marginTop: '2px' }}>
-              Read-only contents and commit activity. No long-lived tokens stored.
-            </div>
+      {/* Row 3: GitHub Connection Details */}
+      <div className="settings-row">
+        <div className="settings-meta">
+          <div className="settings-label">GitHub Integration</div>
+          <div className="settings-desc">
+            {installation.connected
+              ? `Connected to GitHub account ${installation.account_login} via GitHub App.`
+              : 'Operating with connected repositories.'}
           </div>
-
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={onSync}
-            disabled={isSyncing}
-          >
-            {isSyncing ? 'Syncing...' : 'Sync repositories now'}
-          </button>
         </div>
-      </section>
 
-      {/* 4. Export Data */}
-      <section className="settings-section">
-        <h2 className="settings-heading">Data Portability</h2>
-        <p className="settings-desc">
-          Export all of your repository data, commit logs, labels, goals, notes, and audit trails as a formatted JSON file.
-        </p>
-        <button type="button" className="btn-secondary" onClick={onExportData}>
+        <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+          Read-only access
+        </span>
+      </div>
+
+      {/* Row 4: Data Export */}
+      <div className="settings-row">
+        <div className="settings-meta">
+          <div className="settings-label">Data Portability</div>
+          <div className="settings-desc">
+            Download your full repository activity ledger, custom labels, notes, and audit trails as JSON.
+          </div>
+        </div>
+
+        <button type="button" className="btn-outline" onClick={onExportData}>
           Export all data (JSON)
         </button>
-      </section>
+      </div>
 
-      {/* 5. Delete Account */}
-      <section className="settings-section" style={{ borderColor: 'var(--stale)' }}>
-        <h2 className="settings-heading" style={{ color: 'var(--stale)' }}>Delete Account</h2>
-        <p className="settings-desc">
-          Permanently delete your account and all associated repository metadata. This action is irreversible.
-        </p>
+      {/* Row 5: Delete Account */}
+      <div className="settings-row">
+        <div className="settings-meta">
+          <div className="settings-label" style={{ color: 'var(--heat-active)' }}>
+            Delete Account
+          </div>
+          <div className="settings-desc">
+            Permanently delete your account and all associated repository metadata.
+          </div>
+        </div>
+
         <button
           type="button"
-          className="btn-danger"
+          className="btn-ember-outline"
           onClick={() => setShowDeleteModal(true)}
         >
-          Delete my account...
+          Delete account
         </button>
-      </section>
+      </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--stale)', marginBottom: '8px' }}>
-              Confirm Permanent Account Deletion
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--heat-active)', marginBottom: '8px' }}>
+              Confirm Account Deletion
             </h2>
             <p style={{ fontSize: '14px', marginBottom: '16px', lineHeight: 1.5 }}>
-              This will immediately and permanently delete:
+              This will permanently delete all your stored repository records, activity strips, custom labels, notes, and sessions.
             </p>
-            <ul style={{ paddingLeft: '20px', fontSize: '14px', color: 'var(--ink-soft)', marginBottom: '16px', lineHeight: 1.6 }}>
-              <li>All stored repository records and commit activity strips</li>
-              <li>All custom labels, milestone goals, personal notes, and triage decisions</li>
-              <li>All user settings, preferences, and active login sessions</li>
-              <li>All audit event records associated with your account</li>
-            </ul>
             <p style={{ fontSize: '13px', marginBottom: '12px' }}>
               To confirm, type <strong style={{ fontFamily: 'var(--mono)' }}>delete</strong> below:
             </p>
             <input
               type="text"
-              className="form-input"
+              className="clean-input"
               style={{ marginBottom: '16px' }}
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
@@ -265,14 +253,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-outline"
                 onClick={() => setShowDeleteModal(false)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn-danger"
+                className="btn-ember-outline"
                 disabled={deleteConfirmText.toLowerCase() !== 'delete' || isDeleting}
                 onClick={handleDelete}
               >

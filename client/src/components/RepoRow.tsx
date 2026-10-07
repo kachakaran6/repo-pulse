@@ -4,14 +4,14 @@ import { CommitStrip } from './CommitStrip.js';
 
 interface RepoRowProps {
   repo: Repository;
+  currentUsername?: string;
   onOpenDetails: (repo: Repository) => void;
-  onQuickLabel: (repo: Repository, label: string) => void;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return 'No commits recorded';
+  if (!dateStr) return 'No commits';
   const time = new Date(dateStr).getTime();
-  if (isNaN(time)) return 'No commits recorded';
+  if (isNaN(time)) return 'No commits';
 
   const days = Math.floor((Date.now() - time) / 864e5);
   if (days <= 0) return 'Last commit today';
@@ -22,67 +22,65 @@ function formatRelativeTime(dateStr: string | null): string {
   return `Last commit over a year ago`;
 }
 
-export const RepoRow: React.FC<RepoRowProps> = ({ repo, onOpenDetails }) => {
+export const RepoRow: React.FC<RepoRowProps> = ({ repo, currentUsername, onOpenDetails }) => {
   const meta = repo.meta || {};
-  const hasGoal = Boolean(meta.goal_date);
-  const hasNote = Boolean(meta.note);
+
+  // Strip username prefix if repository is owned by the current user
+  let displayName = repo.full_name;
+  if (currentUsername && displayName.startsWith(`${currentUsername}/`)) {
+    displayName = displayName.substring(currentUsername.length + 1);
+  }
 
   return (
-    <div className="repo-row">
-      <div className="repo-title-block">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <a
-            href={`https://github.com/${repo.full_name}`}
-            target="_blank"
-            rel="noreferrer"
-            className="repo-name-link"
-          >
-            {repo.full_name}
-          </a>
-          {repo.is_private && <span className="private-tag">Private</span>}
-          {repo.language && (
-            <span style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>
-              {repo.language}
-            </span>
+    <div
+      className="ledger-row"
+      onClick={() => onOpenDetails(repo)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenDetails(repo);
+        }
+      }}
+      title={`Open details for ${repo.full_name}`}
+    >
+      <div className="repo-info-cell">
+        <div className="repo-name-line">
+          <span>{displayName}</span>
+          {repo.is_private && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-label="Private repository"
+              style={{ color: 'var(--ink-2)', flexShrink: 0 }}
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
           )}
         </div>
-        <div className="repo-meta-row">
+
+        <div className="repo-meta-line">
           <span>{formatRelativeTime(repo.last_commit_at)}</span>
-          {hasGoal && (
-            <span style={{ color: 'var(--active)', fontWeight: 500 }}>
+          {repo.language && <span>{repo.language}</span>}
+          {meta.label && <span className="repo-label-text">{meta.label}</span>}
+          {meta.goal_date && (
+            <span style={{ color: 'var(--heat-active)', fontWeight: 500 }}>
               Goal: {meta.goal_date}
             </span>
           )}
-          {hasNote && (
-            <span style={{ color: 'var(--ink-soft)' }}>Note attached</span>
-          )}
         </div>
       </div>
 
-      <div>
-        <button
-          type="button"
-          className={`label-chip ${!meta.label ? 'empty' : ''}`}
-          onClick={() => onOpenDetails(repo)}
-          title="Edit label and repository goals"
-        >
-          {meta.label || '+ Add label'}
-        </button>
-      </div>
-
-      <div>
-        <CommitStrip activity={repo.activity} status={repo.status} daysCount={30} />
-      </div>
-
-      <div className="row-actions">
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => onOpenDetails(repo)}
-          title="View 90-day history and details"
-        >
-          Details
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <CommitStrip activity={repo.activity} status={repo.status} daysCount={90} />
       </div>
     </div>
   );

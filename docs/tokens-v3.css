@@ -1,0 +1,33 @@
+/* RepoPulse v3 tokens. Heat colors are the ONLY chromatic colors in the UI. */
+:root {
+  color-scheme: light dark;
+  --font: 'Schibsted Grotesk', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --paper: #F2F3F1;      /* page */
+  --surface: #FFFFFF;    /* panels, inputs */
+  --surface-2: #E9EBE8;  /* row hover, quiet fills */
+  --ink: #14181B;        /* text, primary button, focus ring */
+  --ink-2: #4B545B;      /* secondary text */
+  --line: #DADDDA;       /* hairlines */
+
+  --heat-active: #D2382A;   /* ember */
+  --heat-cooling: #B87400;  /* amber */
+  --heat-stale: #4A7BA3;    /* steel */
+  --heat-dead: #7B858D;     /* ash */
+
+  --r: 4px; --r-pill: 999px;
+  --s1: 4px; --s2: 8px; --s3: 16px; --s4: 24px; --s5: 40px; --s6: 64px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #131413; --surface: #1C1D1B; --surface-2: #252623;
+    --ink: #EDEEEA; --ink-2: #A2A8A4; --line: #2E302D;
+    --heat-active: #F2664F; --heat-cooling: #F2B14C; --heat-stale: #86AED0; --heat-dead: #8B9399;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #131413; --surface: #1C1D1B; --surface-2: #252623;
+  --ink: #EDEEEA; --ink-2: #A2A8A4; --line: #2E302D;
+  --heat-active: #F2664F; --heat-cooling: #F2B14C; --heat-stale: #86AED0; --heat-dead: #8B9399;
+}

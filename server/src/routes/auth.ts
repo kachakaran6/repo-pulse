@@ -86,6 +86,11 @@ authRouter.get('/github/callback', async (req, res) => {
  * Instant Demo Login (for developer setup & testing without GitHub OAuth keys)
  */
 authRouter.post('/demo-login', async (req, res) => {
+  if (env.NODE_ENV === 'production') {
+    res.status(403).json({ error: 'Forbidden', message: 'Demo login is disabled in production environments.' });
+    return;
+  }
+
   const schema = z.object({
     username: z.string().min(1).max(39).default('demo-developer'),
   });

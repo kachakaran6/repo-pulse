@@ -18,14 +18,12 @@ export const TriageView: React.FC<TriageViewProps> = ({
   onUndoLastDecision,
   hasUndoableAction,
 }) => {
-  // Cooling and Stale repositories that are not retired and not currently paused
   const todayStr = new Date().toISOString().split('T')[0];
 
   const triageCandidates = useMemo(() => {
     return repos.filter((r) => {
       if (r.is_retired) return false;
       if (r.is_paused) return false;
-      // Focus triage on cooling and stale repos, or undecorated dead repos
       return r.status === 'cooling' || r.status === 'stale';
     });
   }, [repos]);
@@ -37,7 +35,6 @@ export const TriageView: React.FC<TriageViewProps> = ({
   const [pauseDate, setPauseDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Keep index within bounds
   const currentRepo: Repository | undefined = triageCandidates[currentIndex];
 
   const handleNext = useCallback(() => {
@@ -90,10 +87,9 @@ export const TriageView: React.FC<TriageViewProps> = ({
     }
   };
 
-  // Keyboard shortcut handler (K, P, R, Z, Left, Right)
+  // Keyboard shortcut listener (K, P, R, Z, Left, Right)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in an input
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
@@ -103,7 +99,6 @@ export const TriageView: React.FC<TriageViewProps> = ({
         setShowGoalInput(true);
       } else if (e.key === 'p' || e.key === 'P') {
         e.preventDefault();
-        // Default pause date: 30 days from now
         const defaultPause = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0];
         setPauseDate(defaultPause);
         setShowPauseInput(true);
@@ -128,20 +123,18 @@ export const TriageView: React.FC<TriageViewProps> = ({
 
   if (triageCandidates.length === 0 || !currentRepo) {
     return (
-      <div className="empty-state">
-        <h2 className="empty-state-title">All repos triaged</h2>
-        <p className="empty-state-desc">
-          There are no cooling or stale repositories currently awaiting decision.
-          You can check the Overview to see active repositories or visit Archive to view retired ones.
+      <div style={{ padding: '48px 0', textAlign: 'center' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>All repos triaged</h2>
+        <p style={{ fontSize: '14px', color: 'var(--ink-2)', maxWidth: '440px', margin: '0 auto 16px auto' }}>
+          No cooling or stale repositories currently need a decision. Check Overview to see active work or visit Archive for retired projects.
         </p>
         {hasUndoableAction && (
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-outline"
             onClick={onUndoLastDecision}
-            style={{ marginTop: '16px' }}
           >
-            Undo last decision
+            Undo last decision (Z)
           </button>
         )}
       </div>
@@ -174,9 +167,9 @@ export const TriageView: React.FC<TriageViewProps> = ({
       : `Last commit ${daysSinceCommit} day${daysSinceCommit === 1 ? '' : 's'} ago`;
 
   return (
-    <div className="triage-container">
-      {/* Progress & Navigation Header */}
-      <div className="triage-progress-bar">
+    <div className="triage-wrap">
+      {/* Progress & Navigation Line */}
+      <div className="triage-progress-line">
         <span>
           Repository <strong className="num">{currentIndex + 1}</strong> of{' '}
           <strong className="num">{triageCandidates.length}</strong> in triage queue
@@ -185,198 +178,186 @@ export const TriageView: React.FC<TriageViewProps> = ({
           {hasUndoableAction && (
             <button
               type="button"
-              className="icon-btn"
+              className="btn-quiet"
               onClick={onUndoLastDecision}
-              title="Undo last decision (Shortcut: Z)"
             >
               Undo (Z)
             </button>
           )}
           <button
             type="button"
-            className="icon-btn"
+            className="btn-quiet"
             onClick={handlePrev}
             disabled={currentIndex === 0}
-            title="Previous (Left arrow)"
           >
             &larr; Prev
           </button>
           <button
             type="button"
-            className="icon-btn"
+            className="btn-quiet"
             onClick={handleNext}
             disabled={currentIndex === triageCandidates.length - 1}
-            title="Next (Right arrow)"
           >
             Next &rarr;
           </button>
         </div>
       </div>
 
-      {/* Main Triage Focus Card */}
-      <div className="triage-card">
-        <div>
-          <h1 className="triage-repo-name">{currentRepo.full_name}</h1>
-          <div className="triage-status-line">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span className={`status-dot ${currentRepo.status}`} />
-              <strong style={{ textTransform: 'capitalize' }}>{currentRepo.status}</strong>
-            </span>
-            <span>&bull;</span>
-            <span>{lastCommitText}</span>
-            {currentRepo.language && (
-              <>
-                <span>&bull;</span>
-                <span>{currentRepo.language}</span>
-              </>
-            )}
-            {currentRepo.meta?.label && (
-              <>
-                <span>&bull;</span>
-                <span className="label-chip">{currentRepo.meta.label}</span>
-              </>
-            )}
-          </div>
+      {/* 40px Repo Monospace Title & Meta */}
+      <div>
+        <h1 className="triage-title-40">{currentRepo.full_name}</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '15px', color: 'var(--ink-2)', marginTop: '8px' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span className={`swatch-square ${currentRepo.status}`} />
+            <strong style={{ textTransform: 'capitalize', color: 'var(--ink)' }}>{currentRepo.status}</strong>
+          </span>
+          <span>&bull;</span>
+          <span>{lastCommitText}</span>
+          {currentRepo.language && (
+            <>
+              <span>&bull;</span>
+              <span>{currentRepo.language}</span>
+            </>
+          )}
+          {currentRepo.meta?.label && (
+            <>
+              <span>&bull;</span>
+              <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{currentRepo.meta.label}</span>
+            </>
+          )}
         </div>
-
-        {/* 90-Day Commit Strip */}
-        <div className="triage-strip-wrap">
-          <div style={{ fontSize: '12px', color: 'var(--ink-soft)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>90-day commit ledger</span>
-            <span>Today</span>
-          </div>
-          <div className="triage-strip">
-            {ninetyDays.map((day, idx) => {
-              const heightPx = day.commits === 0 ? 4 : Math.min(44, 8 + day.commits * 6);
-              const barClass = day.commits > 0 ? currentRepo.status : 'dead';
-              return (
-                <div
-                  key={idx}
-                  className={`triage-strip-day ${barClass}`}
-                  style={{ height: `${heightPx}px` }}
-                  title={`${day.dateStr}: ${day.commits} commit${day.commits === 1 ? '' : 's'}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Decision Actions Grid */}
-        <div className="triage-actions-grid">
-          <button
-            type="button"
-            className="triage-btn keep"
-            onClick={() => {
-              setShowGoalInput(true);
-              setShowPauseInput(false);
-            }}
-          >
-            <div className="triage-btn-title">
-              <span>Keep going</span>
-              <span className="key-badge">K</span>
-            </div>
-            <p className="triage-btn-desc">Active project. Optional target goal date.</p>
-          </button>
-
-          <button
-            type="button"
-            className="triage-btn pause"
-            onClick={() => {
-              const defaultPause = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0];
-              setPauseDate(defaultPause);
-              setShowPauseInput(true);
-              setShowGoalInput(false);
-            }}
-          >
-            <div className="triage-btn-title">
-              <span>Pause</span>
-              <span className="key-badge">P</span>
-            </div>
-            <p className="triage-btn-desc">Temporarily shelve until a return date.</p>
-          </button>
-
-          <button
-            type="button"
-            className="triage-btn retire"
-            onClick={handleRetire}
-          >
-            <div className="triage-btn-title">
-              <span>Retire</span>
-              <span className="key-badge">R</span>
-            </div>
-            <p className="triage-btn-desc">Move to archive ledger. Can bring back anytime.</p>
-          </button>
-        </div>
-
-        {/* Keep Going Target Date Prompt */}
-        {showGoalInput && (
-          <div className="triage-date-prompt">
-            <div>
-              <label htmlFor="keep-goal-input" style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                Optional target ship / review date:
-              </label>
-              <input
-                id="keep-goal-input"
-                type="date"
-                className="native-date-input"
-                value={goalDate}
-                onChange={(e) => setGoalDate(e.target.value)}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => handleKeep(goalDate || undefined)}
-              >
-                Confirm Keep
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowGoalInput(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Pause Resurface Date Prompt */}
-        {showPauseInput && (
-          <div className="triage-date-prompt">
-            <div>
-              <label htmlFor="pause-resurface-input" style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                Resurfaces on date (hidden until then):
-              </label>
-              <input
-                id="pause-resurface-input"
-                type="date"
-                className="native-date-input"
-                value={pauseDate}
-                min={todayStr}
-                onChange={(e) => setPauseDate(e.target.value)}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => handlePause(pauseDate)}
-              >
-                Confirm Pause
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowPauseInput(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Full-width 90-Day Commit Strip */}
+      <div>
+        <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+          <span>90-day commit activity</span>
+          <span>Today</span>
+        </div>
+        <div className="triage-strip-full">
+          {ninetyDays.map((day, idx) => {
+            const heightPx = day.commits === 0 ? 4 : Math.min(44, 8 + day.commits * 5);
+            const barClass = day.commits > 0 ? currentRepo.status : 'dead';
+            return (
+              <div
+                key={idx}
+                className={`triage-strip-day-full ${barClass}`}
+                style={{ height: `${heightPx}px` }}
+                title={`${day.dateStr}: ${day.commits} commit${day.commits === 1 ? '' : 's'}`}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Three Outline Buttons with shortcuts K / P / R underneath */}
+      <div className="triage-button-row">
+        <button
+          type="button"
+          className="btn-triage-outline"
+          onClick={() => {
+            setShowGoalInput(true);
+            setShowPauseInput(false);
+          }}
+        >
+          <span className="btn-triage-text">Keep going</span>
+          <span className="btn-triage-shortcut">Shortcut: K</span>
+        </button>
+
+        <button
+          type="button"
+          className="btn-triage-outline"
+          onClick={() => {
+            const defaultPause = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0];
+            setPauseDate(defaultPause);
+            setShowPauseInput(true);
+            setShowGoalInput(false);
+          }}
+        >
+          <span className="btn-triage-text">Pause</span>
+          <span className="btn-triage-shortcut">Shortcut: P</span>
+        </button>
+
+        <button
+          type="button"
+          className="btn-triage-outline"
+          onClick={handleRetire}
+        >
+          <span className="btn-triage-text">Retire</span>
+          <span className="btn-triage-shortcut">Shortcut: R</span>
+        </button>
+      </div>
+
+      {/* Keep Going Target Date Prompt */}
+      {showGoalInput && (
+        <div style={{ padding: '16px', backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+          <div>
+            <label htmlFor="keep-goal-input" style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Target milestone or review date:
+            </label>
+            <input
+              id="keep-goal-input"
+              type="date"
+              className="clean-input"
+              style={{ width: '200px' }}
+              value={goalDate}
+              onChange={(e) => setGoalDate(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn-ink"
+              onClick={() => handleKeep(goalDate || undefined)}
+            >
+              Confirm Keep
+            </button>
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => setShowGoalInput(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pause Resurface Date Prompt */}
+      {showPauseInput && (
+        <div style={{ padding: '16px', backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+          <div>
+            <label htmlFor="pause-resurface-input" style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Resurfaces on date (hidden until then):
+            </label>
+            <input
+              id="pause-resurface-input"
+              type="date"
+              className="clean-input"
+              style={{ width: '200px' }}
+              value={pauseDate}
+              min={todayStr}
+              onChange={(e) => setPauseDate(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn-ink"
+              onClick={() => handlePause(pauseDate)}
+            >
+              Confirm Pause
+            </button>
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => setShowPauseInput(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

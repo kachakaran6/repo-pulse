@@ -7,7 +7,7 @@ interface OnboardingViewProps {
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({ onDemoLogin, isLoading }) => {
   const [demoUsername, setDemoUsername] = useState('developer');
-  const [showDataDetails, setShowDataDetails] = useState(false);
+  const isDev = import.meta.env.DEV || window.location.search.includes('auth_demo=true');
 
   const handleDemoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,114 +15,127 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onDemoLogin, isL
   };
 
   return (
-    <div className="onboarding-card">
-      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <span className="brand-dot" style={{ width: '12px', height: '12px' }} />
-          <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.02em' }}>
+    <div className="signin-layout">
+      {/* Left Column: Clear Value Proposition & Sign In */}
+      <div className="signin-left">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="brand-dot" style={{ width: '10px', height: '10px' }} />
+          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em' }}>
             RepoPulse
-          </h1>
-        </div>
-        <p style={{ fontSize: '16px', color: 'var(--ink-soft)' }}>
-          A quiet ledger of your GitHub activity. Decide what to keep, pause, or retire.
-        </p>
-      </div>
-
-      {/* Onboarding Steps */}
-      <div className="onboarding-steps">
-        <div className="onboarding-step-item">
-          <span className="step-num">1</span>
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block', marginBottom: '2px' }}>
-              Sign in with GitHub
-            </strong>
-            <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
-              Authenticate securely with GitHub OAuth. We never store long-lived tokens.
-            </p>
-          </div>
-        </div>
-
-        <div className="onboarding-step-item">
-          <span className="step-num">2</span>
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block', marginBottom: '2px' }}>
-              Select your repositories
-            </strong>
-            <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
-              Choose which personal or organization repositories RepoPulse may read.
-            </p>
-          </div>
-        </div>
-
-        <div className="onboarding-step-item">
-          <span className="step-num">3</span>
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block', marginBottom: '2px' }}>
-              Review your ledger & triage
-            </strong>
-            <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
-              See 90-day commit strips, identify cooling repos, and clear your backlog.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Primary Actions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px' }}>
-        <a
-          href="/auth/github/start"
-          className="btn-primary"
-          style={{ textAlign: 'center', textDecoration: 'none', padding: '10px 16px' }}
-        >
-          Sign in with GitHub
-        </a>
-
-        {/* Demo / Local Developer Sign-in */}
-        <div style={{ padding: '12px', backgroundColor: 'var(--chalk)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-soft)', display: 'block', marginBottom: '6px' }}>
-            Instant Preview & Testing Mode
           </span>
-          <form onSubmit={handleDemoSubmit} style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              className="form-input"
-              style={{ flex: 1, padding: '6px 10px' }}
-              value={demoUsername}
-              onChange={(e) => setDemoUsername(e.target.value)}
-              placeholder="Enter demo username"
-            />
-            <button
-              type="submit"
-              className="btn-secondary"
-              disabled={isLoading}
-              style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}
-            >
-              {isLoading ? 'Loading...' : 'Launch Demo'}
-            </button>
-          </form>
         </div>
-      </div>
 
-      {/* Transparency: What We Read and Store */}
-      <div style={{ marginTop: '24px', borderTop: '1px solid var(--line)', paddingTop: '16px' }}>
-        <button
-          type="button"
-          style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}
-          onClick={() => setShowDataDetails(!showDataDetails)}
-        >
-          {showDataDetails ? 'Hide data transparency details' : 'What we read and store (Data Privacy)'}
-        </button>
+        <h1 className="signin-headline">
+          Know what you are working on and what you abandoned.
+        </h1>
 
-        {showDataDetails && (
-          <div style={{ marginTop: '12px', fontSize: '13px', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-            <p style={{ marginBottom: '8px' }}>
-              <strong>What we store:</strong> Repository names, daily commit counts, relative commit timestamps, and your custom labels/notes.
-            </p>
-            <p>
-              <strong>What we never store:</strong> Source code, commit messages, diffs, pull request bodies, or user passwords.
-            </p>
+        <p className="signin-subhead">
+          A quiet ledger of your GitHub activity. Group your repositories into Active, Cooling, Stale, and Dead, then triage what to keep, pause, or retire.
+        </p>
+
+        <div>
+          <a
+            href="/auth/github/start"
+            className="btn-ink"
+            style={{ padding: '10px 24px', fontSize: '15px' }}
+          >
+            Sign in with GitHub
+          </a>
+        </div>
+
+        <p className="signin-privacy-note">
+          Read-only access to the repos you choose. We store commit counts and dates, never code.
+        </p>
+
+        {/* Development / Testing Demo Sign-in */}
+        {isDev && (
+          <div style={{ marginTop: '16px', padding: '12px 16px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', border: '1px solid var(--line)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-2)', display: 'block', marginBottom: '6px' }}>
+              Development / Demo Preview Mode
+            </span>
+            <form onSubmit={handleDemoSubmit} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                className="clean-input"
+                style={{ flex: 1, padding: '6px 10px' }}
+                value={demoUsername}
+                onChange={(e) => setDemoUsername(e.target.value)}
+                placeholder="Enter username"
+              />
+              <button
+                type="submit"
+                className="btn-outline"
+                disabled={isLoading}
+                style={{ padding: '6px 14px', whiteSpace: 'nowrap', fontSize: '13px' }}
+              >
+                {isLoading ? 'Launching...' : 'Launch Demo'}
+              </button>
+            </form>
           </div>
         )}
+      </div>
+
+      {/* Right Column: Static Preview of Overview */}
+      <div className="sample-preview-card">
+        <span className="sample-badge">Sample data</span>
+
+        <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px' }}>
+          You committed to 3 repos this week. 2 went cold.
+        </div>
+
+        {/* Sample Heat Bar */}
+        <div style={{ display: 'flex', height: '10px', width: '100%', borderRadius: '2px', overflow: 'hidden', marginBottom: '8px' }}>
+          <div style={{ width: '45%', backgroundColor: 'var(--heat-active)' }} />
+          <div style={{ width: '25%', backgroundColor: 'var(--heat-cooling)' }} />
+          <div style={{ width: '15%', backgroundColor: 'var(--heat-stale)' }} />
+          <div style={{ width: '15%', backgroundColor: 'var(--heat-dead)' }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--ink-2)', marginBottom: '16px' }}>
+          <span><span className="swatch-square active" style={{ width: '8px', height: '8px' }} /> Active 8</span>
+          <span><span className="swatch-square cooling" style={{ width: '8px', height: '8px' }} /> Cooling 4</span>
+          <span><span className="swatch-square stale" style={{ width: '8px', height: '8px' }} /> Stale 3</span>
+          <span><span className="swatch-square dead" style={{ width: '8px', height: '8px' }} /> Dead 7</span>
+        </div>
+
+        {/* Sample Rows */}
+        <div style={{ borderTop: '1px solid var(--line)' }}>
+          <div style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 600 }}>repopulse</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Last commit today &bull; TypeScript &bull; SaaS</div>
+            </div>
+            <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', height: '20px' }}>
+              {[2, 4, 0, 1, 3, 0, 5, 2, 4].map((v, i) => (
+                <div key={i} style={{ width: '3px', height: `${Math.max(3, v * 4)}px`, backgroundColor: v > 0 ? 'var(--heat-active)' : 'var(--line)', borderRadius: '1px' }} />
+              ))}
+            </div>
+          </div>
+
+          <div style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 600 }}>metrics-exporter</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Last commit 9 days ago &bull; Go &bull; Infrastructure</div>
+            </div>
+            <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', height: '20px' }}>
+              {[0, 0, 0, 2, 1, 0, 0, 0, 0].map((v, i) => (
+                <div key={i} style={{ width: '3px', height: `${Math.max(3, v * 4)}px`, backgroundColor: v > 0 ? 'var(--heat-cooling)' : 'var(--line)', borderRadius: '1px' }} />
+              ))}
+            </div>
+          </div>
+
+          <div style={{ padding: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 600 }}>customer-crm-v1</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Last commit 18 days ago &bull; TypeScript &bull; Full ERP</div>
+            </div>
+            <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', height: '20px' }}>
+              {[0, 0, 0, 0, 0, 0, 1, 0, 0].map((v, i) => (
+                <div key={i} style={{ width: '3px', height: `${Math.max(3, v * 4)}px`, backgroundColor: v > 0 ? 'var(--heat-stale)' : 'var(--line)', borderRadius: '1px' }} />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -45,7 +45,8 @@ reposRouter.get('/', async (req, res) => {
       committedReposThisWeek++;
     }
 
-    if (status === 'cooling') {
+    // A repository went cold if its last commit fell out of active range within the last 7 days
+    if (explanation.days !== null && explanation.days > thresholds.active && explanation.days <= thresholds.active + 7) {
       wentColdCount++;
     }
 

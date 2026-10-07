@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import type { UserProfile, SummaryStats } from '../types.js';
+import type { UserProfile, SummaryStats, SyncStatus } from '../types.js';
 
 interface ShellProps {
   activeTab: 'overview' | 'triage' | 'archive' | 'settings';
   onSelectTab: (tab: 'overview' | 'triage' | 'archive' | 'settings') => void;
   user: UserProfile | null;
   stats: SummaryStats | null;
+  lastSync: SyncStatus | null;
   onSync: () => Promise<void>;
   isSyncing: boolean;
   onSignOut: () => Promise<void>;
@@ -13,11 +14,25 @@ interface ShellProps {
   children: React.ReactNode;
 }
 
+function formatRelativeSyncTime(dateStr?: string | null): string {
+  if (!dateStr) return 'Not synced yet';
+  const time = new Date(dateStr).getTime();
+  if (isNaN(time)) return 'Not synced yet';
+
+  const diffMinutes = Math.floor((Date.now() - time) / 60000);
+  if (diffMinutes <= 0) return 'Synced just now';
+  if (diffMinutes === 1) return 'Synced 1 min ago';
+  if (diffMinutes < 60) return `Synced ${diffMinutes} min ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `Synced ${diffHours}h ago`;
+}
+
 export const Shell: React.FC<ShellProps> = ({
   activeTab,
   onSelectTab,
   user,
   stats,
+  lastSync,
   onSync,
   isSyncing,
   onSignOut,
@@ -28,15 +43,12 @@ export const Shell: React.FC<ShellProps> = ({
 
   // Undecided triage count = cooling + stale
   const triageCount = (stats?.coolingCount || 0) + (stats?.staleCount || 0);
-  const archiveCount = stats?.retiredCount || 0;
 
   return (
     <div className="app-shell">
-      {/* Top Bar Header */}
       <header className="top-bar">
         <div className="top-bar-inner">
-          {/* Brand Wordmark */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
             <a
               href="#overview"
               className="brand"
@@ -49,7 +61,6 @@ export const Shell: React.FC<ShellProps> = ({
               RepoPulse
             </a>
 
-            {/* Navigation Tabs */}
             {user && (
               <nav className="nav-tabs" aria-label="Main Navigation">
                 <button
@@ -75,11 +86,6 @@ export const Shell: React.FC<ShellProps> = ({
                   onClick={() => onSelectTab('archive')}
                 >
                   Archive
-                  {archiveCount > 0 && (
-                    <span className="badge-count num" style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
-                      ({archiveCount})
-                    </span>
-                  )}
                 </button>
                 <button
                   type="button"
@@ -92,34 +98,39 @@ export const Shell: React.FC<ShellProps> = ({
             )}
           </div>
 
-          {/* Top Bar Right: Sync button & User Profile */}
           {user && (
             <div className="top-bar-right">
-              <button
-                type="button"
-                className="sync-btn"
-                onClick={onSync}
-                disabled={isSyncing}
-                title="Sync recent commit activity across repositories"
-              >
-                {isSyncing ? 'Syncing...' : 'Sync'}
-              </button>
+              {/* Sync text button with relative sync time */}
+              <div className="sync-status-group">
+                <span>
+                  {isSyncing
+                    ? 'Syncing repositories...'
+                    : formatRelativeSyncTime(lastSync?.finished_at)}
+                </span>
+                <button
+                  type="button"
+                  className="btn-quiet"
+                  onClick={onSync}
+                  disabled={isSyncing}
+                >
+                  Sync
+                </button>
+              </div>
 
+              {/* Avatar menu with normal font username */}
               <div style={{ position: 'relative' }}>
                 <button
                   type="button"
                   className="user-profile-badge"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   aria-expanded={showUserMenu}
-                  title="Account menu"
+                  title="User account menu"
                 >
                   <img
                     src={user.avatar_url}
                     alt={user.login}
                     className="user-avatar"
                   />
-                  <span className="mono" style={{ fontWeight: 600 }}>{user.login}</span>
                 </button>
 
                 {showUserMenu && (
@@ -130,19 +141,19 @@ export const Shell: React.FC<ShellProps> = ({
                       top: '36px',
                       backgroundColor: 'var(--surface)',
                       border: '1px solid var(--line)',
-                      borderRadius: 'var(--r-sm)',
-                      padding: '4px',
-                      minWidth: '180px',
+                      borderRadius: 'var(--r)',
+                      padding: '8px 0',
+                      minWidth: '200px',
                       zIndex: 500,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '2px',
+                      boxShadow: 'none',
                     }}
                   >
+                    <div style={{ padding: '4px 16px 8px 16px', borderBottom: '1px solid var(--line)', fontSize: '13px', color: 'var(--ink-2)' }}>
+                      Signed in as <strong style={{ color: 'var(--ink)' }}>{user.login}</strong>
+                    </div>
                     <button
                       type="button"
-                      className="nav-tab"
-                      style={{ width: '100%', justifyContent: 'flex-start', height: '32px' }}
+                      style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
                       onClick={() => {
                         setShowUserMenu(false);
                         onSelectTab('settings');
@@ -152,8 +163,7 @@ export const Shell: React.FC<ShellProps> = ({
                     </button>
                     <button
                       type="button"
-                      className="nav-tab"
-                      style={{ width: '100%', justifyContent: 'flex-start', height: '32px' }}
+                      style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
                       onClick={() => {
                         setShowUserMenu(false);
                         onSignOut();
@@ -163,8 +173,7 @@ export const Shell: React.FC<ShellProps> = ({
                     </button>
                     <button
                       type="button"
-                      className="nav-tab"
-                      style={{ width: '100%', justifyContent: 'flex-start', height: '32px', color: 'var(--stale)' }}
+                      style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--heat-active)' }}
                       onClick={() => {
                         setShowUserMenu(false);
                         onSignOutAll();
@@ -180,7 +189,6 @@ export const Shell: React.FC<ShellProps> = ({
         </div>
       </header>
 
-      {/* Main Screen Content */}
       <main className="main-content">{children}</main>
     </div>
   );

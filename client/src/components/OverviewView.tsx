@@ -5,42 +5,47 @@ import { RepoRow } from './RepoRow.js';
 interface OverviewViewProps {
   repos: Repository[];
   summarySentence: string;
+  currentUsername?: string;
   onOpenDetails: (repo: Repository) => void;
-  onQuickLabel: (repo: Repository, label: string) => void;
   thresholds: { active: number; cooling: number; stale: number };
 }
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   repos,
   summarySentence,
+  currentUsername,
   onOpenDetails,
-  onQuickLabel,
   thresholds,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | RepoStatus>('all');
 
-  // Filter out retired repos from main overview (they live in Archive)
-  const nonRetiredRepos = useMemo(() => {
+  // Exclude retired repos from overview
+  const activePool = useMemo(() => {
     return repos.filter((r) => !r.is_retired);
   }, [repos]);
 
-  // Apply search query and status pill filter
+  const activeCount = activePool.filter((r) => r.status === 'active').length;
+  const coolingCount = activePool.filter((r) => r.status === 'cooling').length;
+  const staleCount = activePool.filter((r) => r.status === 'stale').length;
+  const deadCount = activePool.filter((r) => r.status === 'dead').length;
+  const totalCount = activePool.length || 1;
+
+  // Filter repos by search and status segment
   const filteredRepos = useMemo(() => {
-    return nonRetiredRepos.filter((r) => {
+    return activePool.filter((r) => {
       const matchesStatus = selectedFilter === 'all' || r.status === selectedFilter;
-      const query = searchQuery.trim().toLowerCase();
+      const q = searchQuery.trim().toLowerCase();
       const matchesSearch =
-        !query ||
-        r.full_name.toLowerCase().includes(query) ||
-        (r.meta?.label && r.meta.label.toLowerCase().includes(query)) ||
-        (r.language && r.language.toLowerCase().includes(query));
+        !q ||
+        r.full_name.toLowerCase().includes(q) ||
+        (r.meta?.label && r.meta.label.toLowerCase().includes(q)) ||
+        (r.language && r.language.toLowerCase().includes(q));
 
       return matchesStatus && matchesSearch;
     });
-  }, [nonRetiredRepos, selectedFilter, searchQuery]);
+  }, [activePool, selectedFilter, searchQuery]);
 
-  // Group by status
   const groups: { status: RepoStatus; title: string; desc: string; repos: Repository[] }[] = [
     {
       status: 'active',
@@ -70,61 +75,103 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   return (
     <div>
-      {/* Rule-based Plain Summary Banner */}
-      <div className="summary-banner">{summarySentence}</div>
+      {/* 28px Summary Sentence (no box) */}
+      <h1 className="overview-summary">{summarySentence}</h1>
 
-      {/* Filter and Search Bar */}
-      <div className="filter-bar">
-        <div className="search-input-wrapper">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Filter by repository name, label, or language..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+      {/* Heat Bar Component (Replaces pill filter buttons) */}
+      <div className="heat-bar-section">
+        <div className="heat-bar" role="img" aria-label="Repository status breakdown bar">
+          <div
+            className="heat-segment active"
+            style={{ width: `${(activeCount / totalCount) * 100}%` }}
+            title={`Active: ${activeCount} repos`}
+          />
+          <div
+            className="heat-segment cooling"
+            style={{ width: `${(coolingCount / totalCount) * 100}%` }}
+            title={`Cooling: ${coolingCount} repos`}
+          />
+          <div
+            className="heat-segment stale"
+            style={{ width: `${(staleCount / totalCount) * 100}%` }}
+            title={`Stale: ${staleCount} repos`}
+          />
+          <div
+            className="heat-segment dead"
+            style={{ width: `${(deadCount / totalCount) * 100}%` }}
+            title={`Dead: ${deadCount} repos`}
           />
         </div>
 
-        <div className="filter-pills">
+        {/* Heat Bar Interactive Filter Legend */}
+        <div className="heat-legend">
           <button
             type="button"
-            className={`filter-pill ${selectedFilter === 'all' ? 'active' : ''}`}
+            className="heat-legend-btn"
+            aria-pressed={selectedFilter === 'all'}
             onClick={() => setSelectedFilter('all')}
           >
-            All ({nonRetiredRepos.length})
+            <strong>All</strong> <span className="tabular num">({activePool.length})</span>
           </button>
+
           <button
             type="button"
-            className={`filter-pill ${selectedFilter === 'active' ? 'active' : ''}`}
-            onClick={() => setSelectedFilter('active')}
+            className="heat-legend-btn"
+            aria-pressed={selectedFilter === 'active'}
+            onClick={() => setSelectedFilter(selectedFilter === 'active' ? 'all' : 'active')}
           >
-            Active ({nonRetiredRepos.filter((r) => r.status === 'active').length})
+            <span className="swatch-square active" />
+            <span>Active</span>
+            <span className="tabular num">({activeCount})</span>
           </button>
+
           <button
             type="button"
-            className={`filter-pill ${selectedFilter === 'cooling' ? 'active' : ''}`}
-            onClick={() => setSelectedFilter('cooling')}
+            className="heat-legend-btn"
+            aria-pressed={selectedFilter === 'cooling'}
+            onClick={() => setSelectedFilter(selectedFilter === 'cooling' ? 'all' : 'cooling')}
           >
-            Cooling ({nonRetiredRepos.filter((r) => r.status === 'cooling').length})
+            <span className="swatch-square cooling" />
+            <span>Cooling</span>
+            <span className="tabular num">({coolingCount})</span>
           </button>
+
           <button
             type="button"
-            className={`filter-pill ${selectedFilter === 'stale' ? 'active' : ''}`}
-            onClick={() => setSelectedFilter('stale')}
+            className="heat-legend-btn"
+            aria-pressed={selectedFilter === 'stale'}
+            onClick={() => setSelectedFilter(selectedFilter === 'stale' ? 'all' : 'stale')}
           >
-            Stale ({nonRetiredRepos.filter((r) => r.status === 'stale').length})
+            <span className="swatch-square stale" />
+            <span>Stale</span>
+            <span className="tabular num">({staleCount})</span>
           </button>
+
           <button
             type="button"
-            className={`filter-pill ${selectedFilter === 'dead' ? 'active' : ''}`}
-            onClick={() => setSelectedFilter('dead')}
+            className="heat-legend-btn"
+            aria-pressed={selectedFilter === 'dead'}
+            onClick={() => setSelectedFilter(selectedFilter === 'dead' ? 'all' : 'dead')}
           >
-            Dead ({nonRetiredRepos.filter((r) => r.status === 'dead').length})
+            <span className="swatch-square dead" />
+            <span>Dead</span>
+            <span className="tabular num">({deadCount})</span>
           </button>
         </div>
       </div>
 
-      {/* Status Group Sections */}
+      {/* Clean Search Bar */}
+      <div className="search-bar">
+        <input
+          type="text"
+          className="clean-input"
+          placeholder="Search repositories by name, language, or label..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
+      {/* Grouped Ledger Sections */}
       {groups.map((group) => {
         if (selectedFilter !== 'all' && selectedFilter !== group.status) {
           return null;
@@ -135,37 +182,30 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         }
 
         return (
-          <section key={group.status} className="status-group">
-            <div className="group-header">
-              <div className="group-title-wrap">
-                <span className={`status-dot ${group.status}`} />
-                <h2 className="group-title">{group.title}</h2>
-                <span className="group-count num">({group.repos.length})</span>
+          <section key={group.status} className="ledger-group">
+            <div className="ledger-group-header">
+              <div className="ledger-group-title">
+                <span className={`swatch-square ${group.status}`} />
+                <span>{group.title}</span>
+                <span className="tabular num" style={{ color: 'var(--ink-2)', fontWeight: 400 }}>
+                  ({group.repos.length})
+                </span>
               </div>
-              <span className="group-desc">{group.desc}</span>
+              <span className="ledger-group-rule">{group.desc}</span>
             </div>
 
             {group.repos.length === 0 ? (
-              <div
-                style={{
-                  padding: '16px',
-                  backgroundColor: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 'var(--r-sm)',
-                  fontSize: '13px',
-                  color: 'var(--ink-soft)',
-                }}
-              >
-                No repositories currently in this group.
+              <div style={{ padding: '16px 0', fontSize: '13px', color: 'var(--ink-2)', borderBottom: '1px solid var(--line)' }}>
+                No repositories in this status group.
               </div>
             ) : (
-              <div className="repo-list">
+              <div className="ledger-table">
                 {group.repos.map((repo) => (
                   <RepoRow
                     key={repo.id}
                     repo={repo}
+                    currentUsername={currentUsername}
                     onOpenDetails={onOpenDetails}
-                    onQuickLabel={onQuickLabel}
                   />
                 ))}
               </div>

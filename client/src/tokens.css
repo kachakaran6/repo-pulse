@@ -1,75 +1,70 @@
+/* RepoPulse v3 tokens. Heat colors are the ONLY chromatic colors in the UI. */
 :root {
-  /* Light Theme Tokens (Default) */
-  --chalk: #ECEFF2;
-  --surface: #F8F9FA;
-  --surface-muted: #F2F5F8;
-  --ink: #17212B;
-  --ink-soft: #5B6672;
-  --line: #CDD3DA;
-  --active: #0E7C7B;
-  --cooling: #B7852F;
-  --stale: #A8603A;
-  --dead: #8B94A0;
-
-  /* Typography */
+  color-scheme: light dark;
   --font: 'Schibsted Grotesk', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  /* Spacing */
+  --paper: #F2F3F1;      /* page background */
+  --surface: #FFFFFF;    /* panels, inputs, cards */
+  --surface-2: #E9EBE8;  /* row hover, quiet fills */
+  --ink: #14181B;        /* primary text, primary buttons, focus rings */
+  --ink-2: #4B545B;      /* secondary text, metadata, labels */
+  --line: #DADDDA;       /* hairlines, dividers */
+
+  --heat-active: #D2382A;   /* ember */
+  --heat-cooling: #B87400;  /* amber */
+  --heat-stale: #4A7BA3;    /* steel */
+  --heat-dead: #7B858D;     /* ash */
+
+  --r: 4px;
+  --r-pill: 999px;
   --s1: 4px;
   --s2: 8px;
   --s3: 16px;
   --s4: 24px;
-  --s5: 32px;
-  --s6: 48px;
+  --s5: 40px;
+  --s6: 64px;
 
-  /* Radii */
-  --r-sm: 3px;
-  --r-pill: 999px;
-
-  /* Animation */
   --transition: 150ms ease;
 }
 
-/* System Dark Mode */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --chalk: #12181F;
-    --surface: #1A222B;
-    --surface-muted: #222C38;
-    --ink: #E6EAEE;
-    --ink-soft: #98A3AF;
-    --line: #2B3641;
-    --active: #3FB5B3;
-    --cooling: #D9A94E;
-    --stale: #D58A5E;
-    --dead: #7C8692;
+    --paper: #131413;
+    --surface: #1C1D1B;
+    --surface-2: #252623;
+    --ink: #EDEEEA;
+    --ink-2: #A2A8A4;
+    --line: #2E302D;
+    --heat-active: #F2664F;
+    --heat-cooling: #F2B14C;
+    --heat-stale: #86AED0;
+    --heat-dead: #8B9399;
   }
 }
 
-/* Manual Theme Overrides */
-[data-theme="dark"] {
-  --chalk: #12181F;
-  --surface: #1A222B;
-  --surface-muted: #222C38;
-  --ink: #E6EAEE;
-  --ink-soft: #98A3AF;
-  --line: #2B3641;
-  --active: #3FB5B3;
-  --cooling: #D9A94E;
-  --stale: #D58A5E;
-  --dead: #7C8692;
+:root[data-theme="dark"] {
+  --paper: #131413;
+  --surface: #1C1D1B;
+  --surface-2: #252623;
+  --ink: #EDEEEA;
+  --ink-2: #A2A8A4;
+  --line: #2E302D;
+  --heat-active: #F2664F;
+  --heat-cooling: #F2B14C;
+  --heat-stale: #86AED0;
+  --heat-dead: #8B9399;
 }
 
-[data-theme="light"] {
-  --chalk: #ECEFF2;
-  --surface: #F8F9FA;
-  --surface-muted: #F2F5F8;
-  --ink: #17212B;
-  --ink-soft: #5B6672;
-  --line: #CDD3DA;
-  --active: #0E7C7B;
-  --cooling: #B7852F;
-  --stale: #A8603A;
-  --dead: #8B94A0;
+:root[data-theme="light"] {
+  --paper: #F2F3F1;
+  --surface: #FFFFFF;
+  --surface-2: #E9EBE8;
+  --ink: #14181B;
+  --ink-2: #4B545B;
+  --line: #DADDDA;
+  --heat-active: #D2382A;
+  --heat-cooling: #B87400;
+  --heat-stale: #4A7BA3;
+  --heat-dead: #7B858D;
 }

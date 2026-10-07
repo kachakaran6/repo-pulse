@@ -76,33 +76,33 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({ repo, onClose,
             <h2 style={{ fontFamily: 'var(--mono)', fontSize: '20px', fontWeight: 700 }}>
               {repo.full_name}
             </h2>
-            <div style={{ display: 'flex', gap: '8px', fontSize: '13px', color: 'var(--ink-soft)', marginTop: '4px' }}>
-              <span className={`status-dot ${repo.status}`} />
-              <strong style={{ textTransform: 'capitalize' }}>{repo.status}</strong>
+            <div style={{ display: 'flex', gap: '8px', fontSize: '13px', color: 'var(--ink-2)', marginTop: '4px' }}>
+              <span className={`swatch-square ${repo.status}`} />
+              <strong style={{ textTransform: 'capitalize', color: 'var(--ink)' }}>{repo.status}</strong>
               <span>&bull;</span>
               <span>{repo.explanation.message}</span>
             </div>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose}>
-            &times; Close
+          <button type="button" className="btn-quiet" onClick={onClose} style={{ fontSize: '14px' }}>
+            Close
           </button>
         </div>
 
-        {/* 90-Day Commit Ledger Strip */}
-        <div style={{ marginBottom: '24px', padding: '12px', backgroundColor: 'var(--chalk)', borderRadius: 'var(--r-sm)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ink-soft)', marginBottom: '6px' }}>
+        {/* 90-Day Commit Strip */}
+        <div style={{ marginBottom: '24px', padding: '12px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ink-2)', marginBottom: '6px' }}>
             <span>90-day activity: <strong className="num">{total90DayCommits}</strong> commits across <strong className="num">{activeDaysCount}</strong> days</span>
             <span>Today</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '36px' }}>
             {ninetyDays.map((day, idx) => {
               const heightPx = day.commits === 0 ? 3 : Math.min(32, 6 + day.commits * 4);
-              const barClass = day.commits > 0 ? repo.status : 'dead';
+              const barClass = day.commits > 0 ? repo.status : '';
               return (
                 <div
                   key={idx}
-                  className={`triage-strip-day ${barClass}`}
-                  style={{ height: `${heightPx}px` }}
+                  className={`strip-bar-90 ${barClass}`}
+                  style={{ height: `${heightPx}px`, flex: 1 }}
                   title={`${day.dateStr}: ${day.commits} commit${day.commits === 1 ? '' : 's'}`}
                 />
               );
@@ -113,17 +113,22 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({ repo, onClose,
         {/* Metadata Form */}
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Label selector */}
-          <div className="form-field">
-            <label className="form-label">Classification label</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Classification label</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
               {PREDEFINED_LABELS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
-                  className={`label-chip ${label === preset ? 'active' : ''}`}
                   style={{
-                    backgroundColor: label === preset ? 'var(--ink)' : undefined,
-                    color: label === preset ? 'var(--chalk)' : undefined,
+                    padding: '4px 10px',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r)',
+                    background: label === preset ? 'var(--ink)' : 'var(--surface)',
+                    color: label === preset ? 'var(--paper)' : 'var(--ink)',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
                   }}
                   onClick={() => {
                     setLabel(preset);
@@ -136,7 +141,7 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({ repo, onClose,
             </div>
             <input
               type="text"
-              className="form-input"
+              className="clean-input"
               placeholder="Or type a custom label..."
               value={customLabel}
               onChange={(e) => {
@@ -147,36 +152,40 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({ repo, onClose,
           </div>
 
           {/* Goal Date */}
-          <div className="form-field">
-            <label className="form-label" htmlFor="goal-date-input">Target milestone / ship date</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label htmlFor="modal-goal-input" style={{ fontSize: '13px', fontWeight: 600 }}>
+              Target milestone or review date
+            </label>
             <input
-              id="goal-date-input"
+              id="modal-goal-input"
               type="date"
-              className="form-input"
+              className="clean-input"
               value={goalDate}
               onChange={(e) => setGoalDate(e.target.value)}
             />
           </div>
 
           {/* Note */}
-          <div className="form-field">
-            <label className="form-label" htmlFor="repo-note-textarea">Personal notes & context</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label htmlFor="modal-notes-textarea" style={{ fontSize: '13px', fontWeight: 600 }}>
+              Personal notes & context
+            </label>
             <textarea
-              id="repo-note-textarea"
+              id="modal-notes-textarea"
               rows={3}
-              className="form-input"
-              placeholder="Why this repo matters, current blocker, or next planned step..."
+              className="clean-input"
+              placeholder="Why this repository matters, current blocker, or next planned step..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
 
-          {/* Modal Actions */}
+          {/* Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-outline" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={isSaving}>
+            <button type="submit" className="btn-ink" disabled={isSaving}>
               {isSaving ? 'Saving...' : 'Save changes'}
             </button>
           </div>

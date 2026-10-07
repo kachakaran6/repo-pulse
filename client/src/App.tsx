@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Repository, UserProfile, UserSettings, InstallationStatus, SummaryStats, RepoMetadata } from './types.js';
+import type { Repository, UserProfile, UserSettings, InstallationStatus, SyncStatus, SummaryStats, RepoMetadata } from './types.js';
 import * as api from './api.js';
 import { Shell } from './components/Shell.js';
 import { OverviewView } from './components/OverviewView.js';
@@ -24,6 +24,7 @@ export const App: React.FC = () => {
     theme: 'system',
   });
   const [installation, setInstallation] = useState<InstallationStatus>({ connected: false });
+  const [lastSync, setLastSync] = useState<SyncStatus | null>(null);
   const [repos, setRepos] = useState<Repository[]>([]);
   const [summarySentence, setSummarySentence] = useState<string>('');
   const [stats, setStats] = useState<SummaryStats | null>(null);
@@ -43,7 +44,7 @@ export const App: React.FC = () => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((current) => (current === msg ? null : current));
-    }, 3500);
+    }, 4000);
   };
 
   // Apply theme to document
@@ -65,12 +66,13 @@ export const App: React.FC = () => {
       setUser(meData.user);
       setSettings(meData.settings);
       setInstallation(meData.installation);
+      setLastSync(meData.last_sync);
 
       const reposData = await api.fetchRepos();
       setRepos(reposData.repos);
       setSummarySentence(reposData.summary);
       setStats(reposData.stats);
-    } catch (err: any) {
+    } catch {
       // User is not signed in or session is unauthenticated
       setUser(null);
     } finally {
@@ -81,6 +83,15 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
+
+  // Handle URL auth_demo parameter
+  useEffect(() => {
+    if (window.location.search.includes('auth_demo=true') && !user && !isLoading) {
+      handleDemoLogin('developer').then(() => {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      });
+    }
+  }, [user, isLoading]);
 
   // Reload repos when needed
   const refreshRepos = async () => {
@@ -103,7 +114,6 @@ export const App: React.FC = () => {
     const targetRepo = repos.find((r) => r.id === repoId);
     if (!targetRepo) return;
 
-    // Save previous state to undo stack
     setUndoStack((prev) => [
       ...prev,
       { repoId, previousMeta: { ...targetRepo.meta } },
@@ -180,6 +190,11 @@ export const App: React.FC = () => {
     setErrorMessage(null);
     try {
       const res = await api.triggerSync(true);
+      setLastSync({
+        status: 'success',
+        repos_read: res.repos_read || 0,
+        finished_at: new Date().toISOString(),
+      });
       await refreshRepos();
       showToast(res.message || 'Synchronization complete');
     } catch (err: any) {
@@ -241,7 +256,7 @@ export const App: React.FC = () => {
       await api.loginDemoUser(username);
       await loadInitialData();
       showToast(`Signed in as ${username}`);
-    } catch (err: any) {
+    } catch {
       setErrorMessage('Failed to sign in demo user');
     } finally {
       setIsLoading(false);
@@ -254,6 +269,7 @@ export const App: React.FC = () => {
       onSelectTab={setActiveTab}
       user={user}
       stats={stats}
+      lastSync={lastSync}
       onSync={handleSync}
       isSyncing={isSyncing}
       onSignOut={handleSignOut}
@@ -276,25 +292,22 @@ export const App: React.FC = () => {
       {/* Loading State */}
       {isLoading ? (
         <div>
-          <div style={{ width: '100%', height: '48px', backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', marginBottom: '16px' }} />
-          <SkeletonRow />
+          <div style={{ width: '100%', height: '36px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', marginBottom: '24px' }} />
           <SkeletonRow />
           <SkeletonRow />
           <SkeletonRow />
           <SkeletonRow />
         </div>
       ) : !user ? (
-        /* Unauthenticated Onboarding / Sign-in */
         <OnboardingView onDemoLogin={handleDemoLogin} isLoading={isLoading} />
       ) : (
-        /* Authenticated Main Views */
         <>
           {activeTab === 'overview' && (
             <OverviewView
               repos={repos}
               summarySentence={summarySentence}
+              currentUsername={user.login}
               onOpenDetails={(r) => setSelectedRepoForDetail(r)}
-              onQuickLabel={(r, label) => handleSaveRepoDetails(r.id, { label })}
               thresholds={{
                 active: settings.active_days,
                 cooling: settings.cooling_days,
@@ -323,8 +336,6 @@ export const App: React.FC = () => {
               onUpdateSettings={handleUpdateSettings}
               onExportData={handleExportData}
               onDeleteAccount={handleDeleteAccount}
-              onSync={handleSync}
-              isSyncing={isSyncing}
             />
           )}
         </>
