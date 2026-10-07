@@ -114,8 +114,9 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
-  const origin = req.headers['origin'] || req.headers['referer'];
+  const origin = (req.headers['origin'] || req.headers['referer']) as string | undefined;
   const appUrl = env.APP_URL;
+  const host = req.get('host');
 
   // Custom client header verification
   const customHeader = req.headers['x-requested-with'] || req.headers['x-repopulse-client'] || req.headers['x-csrf-token'];
@@ -123,7 +124,8 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
 
   // Accept valid requests with JSON content-type or custom header or matched origin
   const isJsonMutation = typeof contentType === 'string' && contentType.includes('application/json');
-  const isSameOrigin = !origin || origin.startsWith(appUrl) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1');
+  const isHostOrigin = origin && host ? origin.includes(host) : false;
+  const isSameOrigin = !origin || isHostOrigin || (appUrl && origin.startsWith(appUrl)) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1');
 
   if (isSameOrigin || customHeader || isJsonMutation) {
     return next();

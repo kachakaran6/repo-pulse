@@ -33,7 +33,7 @@ authRouter.get('/github/start', (req, res) => {
 
   if (!env.GITHUB_CLIENT_ID) {
     // In dev / demo mode without GitHub credentials, offer instant redirect
-    res.redirect(`${env.APP_URL}/?auth_demo=true`);
+    res.redirect('/?auth_demo=true');
     return;
   }
 
@@ -55,12 +55,12 @@ authRouter.get('/github/callback', async (req, res) => {
 
   if (!state || !verifyOAuthState(state)) {
     logger.warn('OAuth callback rejected: Invalid or expired state parameter');
-    res.redirect(`${env.APP_URL}/?error=invalid_oauth_state`);
+    res.redirect('/?error=invalid_oauth_state');
     return;
   }
 
   if (!code) {
-    res.redirect(`${env.APP_URL}/?error=missing_code`);
+    res.redirect('/?error=missing_code');
     return;
   }
 
@@ -77,10 +77,10 @@ authRouter.get('/github/callback', async (req, res) => {
       runUserSync(user.id).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
     }
 
-    res.redirect(`${env.APP_URL}/`);
+    res.redirect('/');
   } catch (err: any) {
     logger.error({ error: err.message }, 'OAuth callback failed');
-    res.redirect(`${env.APP_URL}/?error=auth_failed`);
+    res.redirect('/?error=auth_failed');
   }
 });
 

@@ -15,6 +15,9 @@ import { logger } from './utils/logger.js';
 
 export const app = express();
 
+// Trust reverse proxy (Coolify, Nginx, Traefik, Docker)
+app.set('trust proxy', 1);
+
 // Security Headers Middleware per 12-SECURITY.md
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -23,7 +26,7 @@ app.use((_req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com; connect-src 'self' http://localhost:* ws://localhost:*; frame-ancestors 'none';"
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com; connect-src 'self' https: data: http://localhost:* ws://localhost:* wss:; frame-ancestors 'none';"
   );
   if (env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
@@ -31,10 +34,24 @@ app.use((_req, res, next) => {
   next();
 });
 
-// CORS Configuration
+// CORS Configuration (Dynamic support for dev & production domains)
 app.use(
   cors({
-    origin: [env.APP_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or same-origin)
+      if (!origin) return callback(null, true);
+      // In development or when explicitly matching
+      if (
+        origin === env.APP_URL ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('https://localhost:')
+      ) {
+        return callback(null, true);
+      }
+      // Allow production domain origin
+      return callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
