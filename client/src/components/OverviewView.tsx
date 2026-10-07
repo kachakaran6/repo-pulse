@@ -28,6 +28,26 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | RepoStatus>('all');
 
+  // Exclude retired repos from overview (Hooks must be called unconditionally)
+  const activePool = useMemo(() => {
+    return (repos || []).filter((r) => !r.is_retired);
+  }, [repos]);
+
+  // Filter repos by search and status segment
+  const filteredRepos = useMemo(() => {
+    return activePool.filter((r) => {
+      const matchesStatus = selectedFilter === 'all' || r.status === selectedFilter;
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        r.full_name.toLowerCase().includes(q) ||
+        (r.meta?.label && r.meta.label.toLowerCase().includes(q)) ||
+        (r.language && r.language.toLowerCase().includes(q));
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [activePool, selectedFilter, searchQuery]);
+
   // If initial sync / load is in progress and no repos are loaded yet, display rich skeleton
   if ((isSyncing || isLoading) && repos.length === 0) {
     return <OverviewSkeleton message="Syncing your repositories and commit activity from GitHub..." />;
@@ -38,10 +58,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     return (
       <div style={{ padding: '48px 0', maxWidth: '640px' }}>
         <h1 className="overview-summary" style={{ marginBottom: '16px' }}>
-          No repositories synced yet.
+          No repositories connected yet.
         </h1>
         <p style={{ color: 'var(--ink-2)', fontSize: '15px', lineHeight: 1.6, marginBottom: '24px' }}>
-          We could not find any repositories associated with your active session or token. Ensure your GitHub Personal Access Token has <code>repo</code> and <code>read:user</code> scopes enabled.
+          We could not find any repositories associated with your active session. Install the RepoPulse GitHub App or choose repositories to begin synchronization.
         </p>
         {onSync && (
           <button
@@ -58,31 +78,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     );
   }
 
-  // Exclude retired repos from overview
-  const activePool = useMemo(() => {
-    return repos.filter((r) => !r.is_retired);
-  }, [repos]);
-
   const activeCount = activePool.filter((r) => r.status === 'active').length;
   const coolingCount = activePool.filter((r) => r.status === 'cooling').length;
   const staleCount = activePool.filter((r) => r.status === 'stale').length;
   const deadCount = activePool.filter((r) => r.status === 'dead').length;
   const totalCount = activePool.length || 1;
-
-  // Filter repos by search and status segment
-  const filteredRepos = useMemo(() => {
-    return activePool.filter((r) => {
-      const matchesStatus = selectedFilter === 'all' || r.status === selectedFilter;
-      const q = searchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        r.full_name.toLowerCase().includes(q) ||
-        (r.meta?.label && r.meta.label.toLowerCase().includes(q)) ||
-        (r.language && r.language.toLowerCase().includes(q));
-
-      return matchesStatus && matchesSearch;
-    });
-  }, [activePool, selectedFilter, searchQuery]);
 
   const groups: { status: RepoStatus; title: string; desc: string; repos: Repository[] }[] = [
     {

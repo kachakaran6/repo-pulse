@@ -64,6 +64,7 @@ export const Shell: React.FC<ShellProps> = ({
             {user && (
               <nav className="nav-tabs" aria-label="Main Navigation">
                 <button
+                  id="tab-overview"
                   type="button"
                   className={`nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
                   onClick={() => onSelectTab('overview')}
@@ -71,6 +72,7 @@ export const Shell: React.FC<ShellProps> = ({
                   Overview
                 </button>
                 <button
+                  id="tab-analytics"
                   type="button"
                   className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
                   onClick={() => onSelectTab('analytics')}
@@ -78,6 +80,7 @@ export const Shell: React.FC<ShellProps> = ({
                   Analytics
                 </button>
                 <button
+                  id="tab-triage"
                   type="button"
                   className={`nav-tab ${activeTab === 'triage' ? 'active' : ''}`}
                   onClick={() => onSelectTab('triage')}
@@ -88,6 +91,7 @@ export const Shell: React.FC<ShellProps> = ({
                   )}
                 </button>
                 <button
+                  id="tab-archive"
                   type="button"
                   className={`nav-tab ${activeTab === 'archive' ? 'active' : ''}`}
                   onClick={() => onSelectTab('archive')}
@@ -95,6 +99,7 @@ export const Shell: React.FC<ShellProps> = ({
                   Archive
                 </button>
                 <button
+                  id="tab-settings"
                   type="button"
                   className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
                   onClick={() => onSelectTab('settings')}
@@ -115,6 +120,7 @@ export const Shell: React.FC<ShellProps> = ({
                     : formatRelativeSyncTime(lastSync?.finished_at)}
                 </span>
                 <button
+                  id="sync-btn"
                   type="button"
                   className="btn-quiet"
                   onClick={onSync}
@@ -127,6 +133,7 @@ export const Shell: React.FC<ShellProps> = ({
               {/* Avatar menu with normal font username */}
               <div style={{ position: 'relative' }}>
                 <button
+                  id="user-menu-btn"
                   type="button"
                   className="user-profile-badge"
                   onClick={() => setShowUserMenu(!showUserMenu)}
@@ -159,6 +166,7 @@ export const Shell: React.FC<ShellProps> = ({
                       Signed in as <strong style={{ color: 'var(--ink)' }}>{user.login}</strong>
                     </div>
                     <button
+                      id="menu-settings-btn"
                       type="button"
                       style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
                       onClick={() => {
@@ -169,6 +177,7 @@ export const Shell: React.FC<ShellProps> = ({
                       Settings
                     </button>
                     <button
+                      id="signout-btn"
                       type="button"
                       style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
                       onClick={() => {

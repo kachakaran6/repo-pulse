@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import type { UserSettings, InstallationStatus, ThemeChoice } from '../types.js';
+import { ExternalLink } from 'lucide-react';
 
 interface SettingsViewProps {
   settings: UserSettings;
   installation: InstallationStatus;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
-  onConnectToken?: (token: string) => Promise<void>;
-  onDisconnectToken?: () => Promise<void>;
   onExportData: () => void;
   onDeleteAccount: () => Promise<void>;
 }
@@ -15,8 +14,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   installation,
   onUpdateSettings,
-  onConnectToken,
-  onDisconnectToken,
   onExportData,
   onDeleteAccount,
 }) => {
@@ -25,45 +22,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [staleDays, setStaleDays] = useState(settings.stale_days);
   const [theme, setTheme] = useState<ThemeChoice>(settings.theme);
 
-  const [patInput, setPatInput] = useState('');
-  const [isSavingPat, setIsSavingPat] = useState(false);
-  const [patStatusMsg, setPatStatusMsg] = useState<string | null>(null);
-  const [showPatGuide, setShowPatGuide] = useState(false);
-
   const [thresholdError, setThresholdError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleSavePat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!patInput.trim() || !onConnectToken) return;
-    setIsSavingPat(true);
-    setPatStatusMsg(null);
-    try {
-      await onConnectToken(patInput.trim());
-      setPatInput('');
-      setPatStatusMsg('Token connected and repositories synchronized!');
-    } catch (err: any) {
-      setPatStatusMsg(`Error: ${err.message || 'Failed to connect token'}`);
-    } finally {
-      setIsSavingPat(false);
-    }
-  };
-
-  const handleDisconnectPat = async () => {
-    if (!onDisconnectToken) return;
-    setIsSavingPat(true);
-    try {
-      await onDisconnectToken();
-      setPatStatusMsg('Token disconnected.');
-    } catch (err: any) {
-      setPatStatusMsg(`Error: ${err.message}`);
-    } finally {
-      setIsSavingPat(false);
-    }
-  };
 
   // Determine if threshold values changed from saved settings
   const hasThresholdsChanged =
@@ -122,11 +85,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           Settings
         </h1>
         <p style={{ fontSize: '14px', color: 'var(--ink-2)' }}>
-          Configure repository activity thresholds, appearance preferences, and data portability.
+          Configure repository activity thresholds, connected GitHub installation, appearance, and data portability.
         </p>
       </div>
 
-      {/* Row 1: Status Thresholds as an Inline Sentence */}
+      {/* Row 1: Status Thresholds */}
       <form onSubmit={handleSaveThresholds} className="settings-row">
         <div className="settings-meta">
           <div className="settings-label">Activity Thresholds</div>
@@ -183,7 +146,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </form>
 
-      {/* Row 2: Theme Segmented Control */}
+      {/* Row 2: GitHub App Installation */}
+      <div className="settings-row">
+        <div className="settings-meta">
+          <div className="settings-label">GitHub App Connection</div>
+          <div className="settings-desc">
+            {installation.connected
+              ? `Connected to account ${installation.account_login || ''}. Manage which repositories RepoPulse can read on GitHub.`
+              : 'Connect the RepoPulse GitHub App to select which repositories to synchronize.'}
+          </div>
+        </div>
+
+        <div>
+          <a
+            href="https://github.com/settings/installations"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-outline"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', textDecoration: 'none' }}
+          >
+            <span>{installation.connected ? 'Manage on GitHub' : 'Install GitHub App'}</span>
+            <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
+          </a>
+        </div>
+      </div>
+
+      {/* Row 3: Appearance Theme */}
       <div className="settings-row">
         <div className="settings-meta">
           <div className="settings-label">Appearance Theme</div>
@@ -217,101 +205,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-
-      {/* Row 3b: Personal Access Token Configuration */}
-      <div className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label">GitHub Personal Access Token</div>
-          <div className="settings-desc">
-            Connect your GitHub token (<code style={{ fontFamily: 'var(--mono)', fontSize: '12px' }}>ghp_...</code>) for instant repository synchronization without server setup.
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowPatGuide(!showPatGuide)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--heat-stale)',
-              fontSize: '12px',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              padding: '4px 0 0 0',
-              textAlign: 'left',
-              display: 'block'
-            }}
-          >
-            {showPatGuide ? 'Hide instructions' : 'How to generate a token?'}
-          </button>
-          {showPatGuide && (
-            <div style={{
-              fontSize: '12px',
-              lineHeight: 1.5,
-              color: 'var(--ink-2)',
-              backgroundColor: 'var(--surface-2)',
-              padding: '8px 10px',
-              borderRadius: 'var(--r)',
-              marginTop: '6px'
-            }}>
-              1. Open{' '}
-              <a
-                href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'underline' }}
-              >
-                GitHub Token Creator
-              </a><br />
-              2. Select <code style={{ fontFamily: 'var(--mono)' }}>repo</code> (or <code style={{ fontFamily: 'var(--mono)' }}>public_repo</code>) and <code style={{ fontFamily: 'var(--mono)' }}>read:user</code> scopes.<br />
-              3. Click <strong>Generate token</strong> and paste below.
-            </div>
-          )}
-          {patStatusMsg && (
-            <div style={{ fontSize: '12px', marginTop: '6px', color: patStatusMsg.startsWith('Error') ? 'var(--heat-active)' : 'var(--heat-cooling)' }}>
-              {patStatusMsg}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '280px' }}>
-          <form onSubmit={handleSavePat} style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="password"
-              className="clean-input"
-              style={{ flex: 1, padding: '6px 10px', fontSize: '13px', fontFamily: 'var(--mono)' }}
-              value={patInput}
-              onChange={(e) => setPatInput(e.target.value)}
-              placeholder="Paste token (ghp_...)"
-            />
-            <button
-              type="submit"
-              className="btn-ink"
-              style={{ fontSize: '13px', padding: '6px 14px', whiteSpace: 'nowrap' }}
-              disabled={!patInput.trim() || isSavingPat}
-            >
-              {isSavingPat ? 'Syncing...' : 'Save & Sync'}
-            </button>
-          </form>
-
-          {installation.token_connected && onDisconnectToken && (
-            <button
-              type="button"
-              className="btn-outline"
-              style={{ fontSize: '12px', padding: '4px 10px', alignSelf: 'flex-end' }}
-              onClick={handleDisconnectPat}
-              disabled={isSavingPat}
-            >
-              Disconnect Token
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Row 4: Data Export */}
       <div className="settings-row">
         <div className="settings-meta">
           <div className="settings-label">Data Portability</div>
           <div className="settings-desc">
-            Download your full repository activity ledger, custom labels, notes, and audit trails as JSON.
+            Download your full repository activity ledger, custom labels, notes, decisions, and audit trails as JSON.
           </div>
         </div>
 
@@ -327,7 +226,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Delete Account
           </div>
           <div className="settings-desc">
-            Permanently delete your account and all associated repository metadata.
+            Permanently delete your account, session data, and all repository records.
           </div>
         </div>
 
