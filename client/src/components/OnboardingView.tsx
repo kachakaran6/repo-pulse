@@ -1,5 +1,13 @@
-import React from 'react';
-import { Thermometer, Keyboard, ShieldCheck, Check, Minus } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Thermometer, Keyboard, ShieldCheck, Check, Minus, Key, User, Lock, X } from 'lucide-react';
+
+interface OnboardingViewProps {
+  onTokenLogin?: (token: string) => Promise<void>;
+  onLogin?: (username: string, password: string) => Promise<void>;
+  onSignup?: (username: string, password: string, token?: string) => Promise<void>;
+  onDemoLogin?: (username: string) => Promise<void>;
+  isLoading?: boolean;
+}
 
 interface SampleRepo {
   name: string;
@@ -13,7 +21,6 @@ interface SampleRepo {
 function generateSampleActivity(pattern: 'active' | 'cooling' | 'stale' | 'dead'): number[] {
   const days: number[] = new Array(90).fill(0);
   if (pattern === 'active') {
-    // Recent activity in last 7 days + regular history
     [89, 88, 86, 84, 82, 80, 78, 75, 71, 68, 64, 60, 55, 52, 48, 44, 40, 35, 30, 25, 20, 15, 10, 5, 2, 0].forEach((idx) => {
       days[89 - idx] = Math.floor((idx % 4) + 1);
     });
@@ -21,17 +28,14 @@ function generateSampleActivity(pattern: 'active' | 'cooling' | 'stale' | 'dead'
     days[88] = 5;
     days[86] = 2;
   } else if (pattern === 'cooling') {
-    // Last commit was 9-12 days ago
     [75, 72, 68, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10].forEach((idx) => {
       days[89 - idx] = Math.floor((idx % 3) + 1);
     });
   } else if (pattern === 'stale') {
-    // Last commit was 18-24 days ago
     [65, 60, 55, 50, 42, 35, 28, 20].forEach((idx) => {
       days[89 - idx] = Math.floor((idx % 3) + 1);
     });
   } else {
-    // Dead: no commits in last 45+ days
     [35, 28, 15, 5].forEach((idx) => {
       days[89 - idx] = 1;
     });
@@ -72,10 +76,106 @@ const SAMPLE_REPOS: SampleRepo[] = [
 
 const TRIAGE_SAMPLE_ACTIVITY = generateSampleActivity('cooling');
 
-export const OnboardingView: React.FC = () => {
+export const OnboardingView: React.FC<OnboardingViewProps> = ({
+  onTokenLogin,
+  onLogin,
+  onSignup,
+  isLoading = false,
+}) => {
+  const [tokenInput, setTokenInput] = useState('');
+  const [finalTokenInput, setFinalTokenInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showTokenGuide, setShowTokenGuide] = useState(false);
+
+  // Account Modal state
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [authTab, setAuthTab] = useState<'login' | 'signup'>('login');
+  const [accountUsername, setAccountUsername] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountToken, setAccountToken] = useState('');
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  const heroInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle Token Submission from Hero
+  const handleHeroTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    const clean = tokenInput.trim();
+    if (!clean) {
+      setErrorMessage('Please enter your GitHub Personal Access Token.');
+      heroInputRef.current?.focus();
+      return;
+    }
+
+    if (!onTokenLogin) return;
+    setIsSubmitting(true);
+    try {
+      await onTokenLogin(clean);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Token authentication failed. Check permissions and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle Token Submission from Final Band
+  const handleFinalTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    const clean = finalTokenInput.trim();
+    if (!clean) {
+      heroInputRef.current?.focus();
+      heroInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (!onTokenLogin) return;
+    setIsSubmitting(true);
+    try {
+      await onTokenLogin(clean);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Token authentication failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle Account Modal Submit
+  const handleAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccountError(null);
+
+    if (!accountUsername.trim() || !accountPassword.trim()) {
+      setAccountError('Username and password are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (authTab === 'login' && onLogin) {
+        await onLogin(accountUsername.trim(), accountPassword);
+        setShowAccountModal(false);
+      } else if (authTab === 'signup' && onSignup) {
+        await onSignup(accountUsername.trim(), accountPassword, accountToken.trim() || undefined);
+        setShowAccountModal(false);
+      }
+    } catch (err: any) {
+      setAccountError(err.message || 'Authentication failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const focusHeroInput = () => {
+    heroInputRef.current?.focus();
+    heroInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   return (
     <div className="landing-page">
-      {/* 1. Header (Once, wordmark left text only, sign in actions right) */}
+      {/* 1. Header (Once, wordmark left text only, token actions right) */}
       <header className="landing-header">
         <div className="landing-container landing-header-inner">
           <a href="/" className="landing-wordmark">
@@ -83,12 +183,33 @@ export const OnboardingView: React.FC = () => {
           </a>
 
           <nav className="landing-nav" aria-label="Main Navigation">
-            <a href="/auth/github/start" className="landing-nav-link">
-              Sign in
+            <a
+              href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="landing-nav-link"
+            >
+              Create token
             </a>
-            <a href="/auth/github/start" className="landing-btn-primary">
-              Sign in with GitHub
-            </a>
+            <button
+              type="button"
+              className="landing-nav-link"
+              onClick={() => {
+                setAuthTab('login');
+                setAccountError(null);
+                setShowAccountModal(true);
+              }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Account sign in
+            </button>
+            <button
+              type="button"
+              className="landing-btn-primary"
+              onClick={focusHeroInput}
+            >
+              Connect token
+            </button>
           </nav>
         </div>
       </header>
@@ -106,17 +227,75 @@ export const OnboardingView: React.FC = () => {
               RepoPulse reads your GitHub commits and sorts every repo into Active, Cooling, Stale or Dead. Then you decide what to keep, pause or retire.
             </p>
 
-            <div className="landing-hero-actions">
-              <a href="/auth/github/start" className="landing-btn-primary">
-                Sign in with GitHub
-              </a>
-              <a href="#sample-preview" className="landing-link-quiet">
-                See a sample
-              </a>
-            </div>
+            {/* Direct Token Authentication Form */}
+            <form onSubmit={handleHeroTokenSubmit} className="landing-token-form" id="token-form">
+              <div className="landing-token-input-group">
+                <input
+                  ref={heroInputRef}
+                  type="password"
+                  className="clean-input landing-token-input mono"
+                  placeholder="Paste GitHub Personal Access Token (ghp_...)"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  disabled={isSubmitting || isLoading}
+                  autoComplete="off"
+                />
+                <button
+                  type="submit"
+                  className="landing-btn-primary"
+                  disabled={isSubmitting || isLoading}
+                >
+                  {isSubmitting ? 'Syncing...' : 'Connect & Sync'}
+                </button>
+              </div>
+
+              {errorMessage && (
+                <div className="landing-form-error">
+                  {errorMessage}
+                </div>
+              )}
+
+              <div className="landing-token-helpers">
+                <button
+                  type="button"
+                  className="landing-link-quiet"
+                  onClick={() => setShowTokenGuide(!showTokenGuide)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '13px' }}
+                >
+                  {showTokenGuide ? 'Hide token guide' : 'How to generate a token in 30 seconds'}
+                </button>
+
+                <a href="#sample-preview" className="landing-link-quiet" style={{ fontSize: '13px' }}>
+                  See a sample
+                </a>
+              </div>
+
+              {showTokenGuide && (
+                <div className="landing-guide-box">
+                  <p style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
+                    Generating your GitHub token:
+                  </p>
+                  <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--ink-2)' }}>
+                    <li>
+                      Open{' '}
+                      <a
+                        href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'underline' }}
+                      >
+                        GitHub Token Settings
+                      </a>
+                    </li>
+                    <li>Ensure <code>repo</code> and <code>read:user</code> scopes are selected.</li>
+                    <li>Click <strong>Generate token</strong>, copy the token string, and paste above.</li>
+                  </ol>
+                </div>
+              )}
+            </form>
 
             <p className="landing-hero-note">
-              Read-only access to the repos you choose.
+              Read-only access to the repos you choose. Tokens remain in your secure session and are never shared.
             </p>
           </div>
 
@@ -421,11 +600,23 @@ export const OnboardingView: React.FC = () => {
           <h2 className="landing-final-h2">
             Find out what you have actually been working on.
           </h2>
-          <div>
-            <a href="/auth/github/start" className="landing-btn-inverted">
-              Sign in with GitHub
-            </a>
-          </div>
+
+          <form onSubmit={handleFinalTokenSubmit} style={{ display: 'flex', gap: '8px', maxWidth: '480px', width: '100%' }}>
+            <input
+              type="password"
+              className="clean-input mono"
+              placeholder="Paste token (ghp_...)"
+              value={finalTokenInput}
+              onChange={(e) => setFinalTokenInput(e.target.value)}
+              style={{ flex: 1, height: '48px', fontSize: '14px', backgroundColor: 'var(--surface)', color: 'var(--ink)' }}
+            />
+            <button
+              type="submit"
+              className="landing-btn-inverted"
+            >
+              Connect & Sync
+            </button>
+          </form>
         </div>
       </section>
 
@@ -445,6 +636,108 @@ export const OnboardingView: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Account Login / Signup Modal Dialog */}
+      {showAccountModal && (
+        <div className="modal-backdrop" onClick={() => setShowAccountModal(false)}>
+          <div className="modal-panel" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className={`segmented-btn ${authTab === 'login' ? 'active' : ''}`}
+                  onClick={() => { setAuthTab('login'); setAccountError(null); }}
+                >
+                  Log In
+                </button>
+                <button
+                  type="button"
+                  className={`segmented-btn ${authTab === 'signup' ? 'active' : ''}`}
+                  onClick={() => { setAuthTab('signup'); setAccountError(null); }}
+                >
+                  Sign Up
+                </button>
+              </div>
+              <button
+                type="button"
+                className="btn-quiet"
+                onClick={() => setShowAccountModal(false)}
+                style={{ padding: '4px' }}
+                aria-label="Close dialog"
+              >
+                <X size={18} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </div>
+
+            {accountError && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--surface-2)', borderLeft: '3px solid var(--heat-active)', color: 'var(--heat-active)', fontSize: '13px', marginBottom: '16px', borderRadius: '2px' }}>
+                {accountError}
+              </div>
+            )}
+
+            <form onSubmit={handleAccountSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>
+                  Username
+                </label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  style={{ width: '100%', height: '40px' }}
+                  placeholder="Username"
+                  value={accountUsername}
+                  onChange={(e) => setAccountUsername(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>
+                  Password
+                </label>
+                <input
+                  type="password"
+                  className="clean-input"
+                  style={{ width: '100%', height: '40px' }}
+                  placeholder="••••••••"
+                  value={accountPassword}
+                  onChange={(e) => setAccountPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {authTab === 'signup' && (
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>
+                    GitHub Token (Optional for cloud sync)
+                  </label>
+                  <input
+                    type="password"
+                    className="clean-input mono"
+                    style={{ width: '100%', height: '40px' }}
+                    placeholder="ghp_..."
+                    value={accountToken}
+                    onChange={(e) => setAccountToken(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn-ink"
+                style={{ width: '100%', height: '44px', marginTop: '8px', fontSize: '14px' }}
+                disabled={isSubmitting}
+              >
+                {isSubmitting
+                  ? 'Please wait...'
+                  : authTab === 'login'
+                  ? 'Sign in to account'
+                  : 'Create account'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

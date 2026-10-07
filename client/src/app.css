@@ -797,6 +797,56 @@ a {
   flex-wrap: wrap;
 }
 
+.landing-token-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 520px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.landing-token-input-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.landing-token-input {
+  flex: 1;
+  height: 48px;
+  font-size: 14px;
+  padding: 0 14px;
+  background-color: var(--surface);
+}
+
+.landing-token-helpers {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.landing-form-error {
+  padding: 8px 12px;
+  background-color: var(--surface-2);
+  border-left: 3px solid var(--heat-active);
+  color: var(--heat-active);
+  font-size: 13px;
+  border-radius: 2px;
+}
+
+.landing-guide-box {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
 .landing-link-quiet {
   font-size: 15px;
   font-weight: 500;
@@ -815,7 +865,7 @@ a {
 .landing-hero-note {
   font-size: 15px;
   color: var(--ink-2);
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 /* Hero Right: Static Overview Preview */

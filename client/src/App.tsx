@@ -348,7 +348,13 @@ export const App: React.FC = () => {
             onAction={() => setErrorMessage(null)}
           />
         )}
-        <OnboardingView />
+        <OnboardingView
+          onTokenLogin={handleTokenLogin}
+          onLogin={handlePasswordLogin}
+          onSignup={handleSignup}
+          onDemoLogin={handleDemoLogin}
+          isLoading={isLoading}
+        />
       </>
     );
   }
