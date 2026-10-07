@@ -134,7 +134,7 @@ class MemoryTenantStore {
     return null;
   }
 
-  createUser(user: { github_user_id?: number; login: string; name?: string; avatar_url?: string; password_hash?: string; saved_token?: string }) {
+  createUser(user: { github_user_id?: number; login: string; name?: string; avatar_url?: string; password_hash?: string | null; saved_token?: string | null }) {
     const id = ++this.nextId;
     const githubId = user.github_user_id || id;
     const record = {

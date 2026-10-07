@@ -219,6 +219,7 @@ authRouter.post('/signup', async (req, res) => {
     saved_token: cleanToken,
   });
 
+
   if (cleanToken) {
     userTokens.set(newUser.id, cleanToken);
     // Trigger sync
