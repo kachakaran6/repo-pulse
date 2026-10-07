@@ -69,7 +69,7 @@ app.use(
 );
 
 // Cookie parser
-app.use(cookieParser(env.COOKIE_SECRET));
+app.use(cookieParser());
 
 // Raw body parser capture for webhook verification
 app.use(

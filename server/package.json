@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
@@ -31,6 +32,7 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "drizzle-kit": "^0.31.11",
+    "playwright": "^1.63.0",
     "supertest": "^7.3.1",
     "vitest": "^5.0.3"
   }

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { env } from '../config/env.js';
-import { memoryDb } from '../db/index.js';
+import { authPool } from '../db/index.js';
 import { logger } from '../utils/logger.js';
 
 // Idempotency delivery cache with 1-hour TTL
@@ -87,18 +87,31 @@ export async function handleGitHubWebhook(req: Request, res: Response): Promise<
     if (event === 'push') {
       const repoFullName = payload.repository?.full_name;
       const pushedHeadCommit = payload.head_commit?.timestamp || payload.pushed_at;
-      
+
       logger.info({ repoFullName, event }, 'Processing push webhook');
 
       if (repoFullName) {
-        // Find matching repos across all users and update last_commit_at
-        for (const repo of memoryDb.repos.values()) {
-          if (repo.full_name.toLowerCase() === repoFullName.toLowerCase()) {
-            repo.last_commit_at = new Date(pushedHeadCommit || Date.now());
-            const day = new Date().toISOString().split('T')[0];
-            const currentAct = memoryDb.repoActivity.get(`${repo.id}_${day}`) || { commits: 0 };
-            memoryDb.upsertActivity(repo.id, repo.user_id, day, currentAct.commits + (payload.commits?.length || 1));
-          }
+        const lastCommit = pushedHeadCommit ? new Date(pushedHeadCommit) : new Date();
+        const commitsCount = payload.commits?.length || 1;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Update matching repos in database across all users
+        const updatedRepos = await authPool.query(
+          `UPDATE repos
+           SET last_commit_at = $1, synced_at = now()
+           WHERE lower(full_name) = lower($2)
+           RETURNING id, user_id`,
+          [lastCommit, repoFullName]
+        );
+
+        for (const r of updatedRepos.rows) {
+          await authPool.query(
+            `INSERT INTO repo_activity (repo_id, user_id, day, commits)
+             VALUES ($1, $2, $3::date, $4)
+             ON CONFLICT (repo_id, day)
+             DO UPDATE SET commits = repo_activity.commits + EXCLUDED.commits`,
+            [r.id, r.user_id, todayStr, commitsCount]
+          );
         }
       }
     } else if (event === 'installation' || event === 'installation_repositories') {
