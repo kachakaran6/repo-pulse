@@ -16,6 +16,7 @@ import {
 import { requireAuth, authRateLimiter } from '../auth/middleware.js';
 import { memoryDb } from '../db/index.js';
 import { runUserSync } from '../sync/engine.js';
+import { validateGitHubToken, syncReposWithPat, userTokens } from '../sync/github-pat.js';
 import { logger } from '../utils/logger.js';
 
 export const authRouter = Router();
@@ -121,6 +122,56 @@ authRouter.post('/demo-login', async (req, res) => {
     },
   });
 });
+
+/**
+ * Sign in using GitHub Personal Access Token (PAT)
+ */
+authRouter.post('/token-login', async (req, res) => {
+  const schema = z.object({
+    token: z.string().min(1, 'Token is required'),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation Error', message: 'GitHub token is required.' });
+    return;
+  }
+
+  try {
+    const rawToken = parsed.data.token.trim();
+    const ghUser = await validateGitHubToken(rawToken);
+
+    const user = await findOrCreateUser({
+      id: ghUser.id,
+      login: ghUser.login,
+      name: ghUser.name || ghUser.login,
+      avatar_url: ghUser.avatar_url,
+    });
+
+    // Store token in active session store
+    userTokens.set(user.id, rawToken);
+
+    await createSession(user.id, req, res);
+    memoryDb.logAudit(user.id, 'user_logged_in', { method: 'pat' });
+
+    // Run initial live sync with PAT
+    await syncReposWithPat(user.id, rawToken);
+
+    res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        login: user.login,
+        name: user.name,
+        avatar_url: user.avatar_url,
+      },
+    });
+  } catch (err: any) {
+    logger.error({ error: err.message }, 'PAT login failed');
+    res.status(401).json({ error: 'Authentication Failed', message: err.message || 'Invalid GitHub token' });
+  }
+});
+
 
 /**
  * Sign out current session

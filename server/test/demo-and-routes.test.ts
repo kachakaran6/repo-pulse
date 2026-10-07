@@ -91,4 +91,37 @@ describe('Demo Mode & Route Quality Gates', () => {
 
     expect(invalidRes.status).toBe(400);
   });
+
+  it('rejects invalid GitHub Personal Access Token gracefully with 401', async () => {
+    const res = await request(app)
+      .post('/auth/token-login')
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ token: 'ghp_invalid_mock_token_12345' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('Authentication Failed');
+  });
+
+  it('allows disconnecting Personal Access Token via DELETE /api/token', async () => {
+    const user = memoryDb.createUser({
+      github_user_id: 888,
+      login: 'pat-tester',
+    });
+    const sessionToken = 'pat_tester_session_token_32_characters';
+    memoryDb.createSession({
+      id_hash: hashToken(sessionToken),
+      user_id: user.id,
+      expires_at: new Date(Date.now() + 864e5),
+    });
+
+    const delRes = await request(app)
+      .delete('/api/token')
+      .set('Cookie', [`sid=${sessionToken}`])
+      .set('X-Requested-With', 'XMLHttpRequest');
+
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.ok).toBe(true);
+    expect(delRes.body.message).toContain('disconnected');
+  });
 });
+

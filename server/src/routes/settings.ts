@@ -4,6 +4,8 @@ import { requireAuth } from '../auth/middleware.js';
 import { memoryDb } from '../db/index.js';
 import { destroyAllUserSessions, COOKIE_NAME } from '../auth/session.js';
 import { thresholdsSchema } from '../core/status.js';
+import { validateGitHubToken, syncReposWithPat, userTokens } from '../sync/github-pat.js';
+import { logger } from '../utils/logger.js';
 
 export const settingsRouter = Router();
 
@@ -19,6 +21,7 @@ settingsRouter.get('/me', async (req, res) => {
   const settings = memoryDb.getSettings(userId);
   const installation = memoryDb.getInstallation(userId);
   const lastSync = memoryDb.getLatestSyncRun(userId);
+  const isTokenConnected = userTokens.has(userId);
 
   res.json({
     user: {
@@ -34,6 +37,7 @@ settingsRouter.get('/me', async (req, res) => {
       stale_days: settings.stale_days,
       theme: settings.theme,
     },
+    token_connected: isTokenConnected,
     installation: installation
       ? {
           connected: true,
@@ -50,6 +54,58 @@ settingsRouter.get('/me', async (req, res) => {
           finished_at: lastSync.finished_at ? new Date(lastSync.finished_at).toISOString() : null,
         }
       : null,
+  });
+});
+
+/**
+ * POST /api/token
+ * Connect or update GitHub Personal Access Token and sync repositories
+ */
+settingsRouter.post('/token', async (req, res) => {
+  const userId = req.user!.id;
+  const schema = z.object({
+    token: z.string().min(1, 'Token is required'),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation Error', message: 'Token is required.' });
+    return;
+  }
+
+  try {
+    const rawToken = parsed.data.token.trim();
+    await validateGitHubToken(rawToken);
+
+    userTokens.set(userId, rawToken);
+    memoryDb.logAudit(userId, 'token_connected');
+
+    // Run sync immediately
+    const syncResult = await syncReposWithPat(userId, rawToken);
+
+    res.json({
+      ok: true,
+      message: `Personal Access Token connected. Synced ${syncResult.reposRead} repositories.`,
+      repos_read: syncResult.reposRead,
+    });
+  } catch (err: any) {
+    logger.error({ userId, error: err.message }, 'Failed to connect PAT');
+    res.status(400).json({ error: 'Token Error', message: err.message || 'Invalid Personal Access Token' });
+  }
+});
+
+/**
+ * DELETE /api/token
+ * Disconnect GitHub Personal Access Token
+ */
+settingsRouter.delete('/token', async (req, res) => {
+  const userId = req.user!.id;
+  userTokens.delete(userId);
+  memoryDb.logAudit(userId, 'token_disconnected');
+
+  res.json({
+    ok: true,
+    message: 'Personal Access Token disconnected.',
   });
 });
 

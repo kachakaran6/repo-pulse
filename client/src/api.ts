@@ -96,6 +96,47 @@ export async function loginDemoUser(username = 'demo-developer'): Promise<{ ok: 
   return res.json();
 }
 
+export async function loginWithToken(token: string): Promise<{ ok: boolean; user: UserProfile }> {
+  const res = await fetch(`/auth/token-login`, {
+    method: 'POST',
+    headers: defaultHeaders,
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Personal Access Token authentication failed');
+  }
+  return res.json();
+}
+
+export async function connectToken(token: string): Promise<{ ok: boolean; message: string; repos_read?: number }> {
+  const res = await fetch(`${API_BASE}/token`, {
+    method: 'POST',
+    headers: defaultHeaders,
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to connect token');
+  }
+  return res.json();
+}
+
+export async function disconnectToken(): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/token`, {
+    method: 'DELETE',
+    headers: defaultHeaders,
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to disconnect token');
+  }
+  return res.json();
+}
+
 export async function logout(): Promise<void> {
   await fetch(`/auth/logout`, {
     method: 'POST',

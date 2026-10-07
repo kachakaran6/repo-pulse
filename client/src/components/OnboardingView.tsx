@@ -2,12 +2,37 @@ import React, { useState } from 'react';
 
 interface OnboardingViewProps {
   onDemoLogin: (username: string) => Promise<void>;
+  onTokenLogin: (token: string) => Promise<void>;
   isLoading: boolean;
 }
 
-export const OnboardingView: React.FC<OnboardingViewProps> = ({ onDemoLogin, isLoading }) => {
+export const OnboardingView: React.FC<OnboardingViewProps> = ({
+  onDemoLogin,
+  onTokenLogin,
+  isLoading,
+}) => {
+  const [tokenInput, setTokenInput] = useState('');
   const [demoUsername, setDemoUsername] = useState('developer');
-  const isDev = import.meta.env.DEV || window.location.search.includes('auth_demo=true');
+  const [showTokenGuide, setShowTokenGuide] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [isSubmittingToken, setIsSubmittingToken] = useState(false);
+
+  const handleTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTokenError(null);
+    if (!tokenInput.trim()) {
+      setTokenError('Please enter a valid GitHub token.');
+      return;
+    }
+    setIsSubmittingToken(true);
+    try {
+      await onTokenLogin(tokenInput.trim());
+    } catch (err: any) {
+      setTokenError(err.message || 'Failed to authenticate with GitHub token');
+    } finally {
+      setIsSubmittingToken(false);
+    }
+  };
 
   const handleDemoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,46 +58,121 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onDemoLogin, isL
           A quiet ledger of your GitHub activity. Group your repositories into Active, Cooling, Stale, and Dead, then triage what to keep, pause, or retire.
         </p>
 
-        <div>
-          <a
-            href="/auth/github/start"
-            className="btn-ink"
-            style={{ padding: '10px 24px', fontSize: '15px' }}
-          >
-            Sign in with GitHub
-          </a>
-        </div>
-
-        <p className="signin-privacy-note">
-          Read-only access to the repos you choose. We store commit counts and dates, never code.
-        </p>
-
-        {/* Development / Testing Demo Sign-in */}
-        {isDev && (
-          <div style={{ marginTop: '16px', padding: '12px 16px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', border: '1px solid var(--line)' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-2)', display: 'block', marginBottom: '6px' }}>
-              Development / Demo Preview Mode
+        {/* Option 1: Personal Access Token (Zero Setup) */}
+        <div style={{
+          backgroundColor: 'var(--surface-2)',
+          padding: '16px',
+          borderRadius: 'var(--r)',
+          border: '1px solid var(--line)',
+          marginBottom: '16px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700 }}>
+              Quick Connect with GitHub Token
             </span>
-            <form onSubmit={handleDemoSubmit} style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setShowTokenGuide(!showTokenGuide)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--heat-stale)',
+                fontSize: '12px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: 0
+              }}
+            >
+              {showTokenGuide ? 'Hide instructions' : 'How to get a token?'}
+            </button>
+          </div>
+
+          {showTokenGuide && (
+            <div style={{
+              fontSize: '12px',
+              lineHeight: 1.6,
+              color: 'var(--ink-2)',
+              backgroundColor: 'var(--paper)',
+              padding: '10px 12px',
+              borderRadius: 'var(--r)',
+              border: '1px solid var(--line)',
+              marginBottom: '12px'
+            }}>
+              <strong style={{ color: 'var(--ink)' }}>Step-by-step token setup:</strong>
+              <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                <li>
+                  Click{' '}
+                  <a
+                    href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--heat-active)', fontWeight: 600, textDecoration: 'underline' }}
+                  >
+                    Create GitHub Token (Pre-filled Link) ↗
+                  </a>
+                </li>
+                <li>Ensure <code style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}>repo</code> and <code style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}>read:user</code> scopes are selected.</li>
+                <li>Click <strong>Generate token</strong> at the bottom of the GitHub page.</li>
+                <li>Copy the generated token (<code style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}>ghp_...</code>) and paste it below.</li>
+              </ol>
+            </div>
+          )}
+
+          <form onSubmit={handleTokenSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <input
-                type="text"
+                type="password"
                 className="clean-input"
-                style={{ flex: 1, padding: '6px 10px' }}
-                value={demoUsername}
-                onChange={(e) => setDemoUsername(e.target.value)}
-                placeholder="Enter username"
+                style={{ flex: 1, padding: '8px 12px', fontSize: '13px', fontFamily: 'var(--mono)' }}
+                placeholder="Paste token (ghp_... or github_pat_...)"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
               />
               <button
                 type="submit"
-                className="btn-outline"
-                disabled={isLoading}
-                style={{ padding: '6px 14px', whiteSpace: 'nowrap', fontSize: '13px' }}
+                className="btn-ink"
+                disabled={isSubmittingToken || isLoading}
+                style={{ padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}
               >
-                {isLoading ? 'Launching...' : 'Launch Demo'}
+                {isSubmittingToken ? 'Syncing...' : 'Connect & Sync'}
               </button>
-            </form>
-          </div>
-        )}
+            </div>
+            {tokenError && (
+              <div style={{ fontSize: '12px', color: 'var(--heat-active)' }}>
+                {tokenError}
+              </div>
+            )}
+          </form>
+
+          <p style={{ fontSize: '11px', color: 'var(--ink-2)', margin: '8px 0 0 0' }}>
+            🔒 Tokens are kept in your secure session only. Used exclusively to read repository commit history.
+          </p>
+        </div>
+
+        {/* Option 2: GitHub OAuth App or Demo */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <a
+            href="/auth/github/start"
+            className="btn-outline"
+            style={{ padding: '8px 16px', fontSize: '13px' }}
+          >
+            Sign in with GitHub OAuth
+          </a>
+
+          <button
+            type="button"
+            className="btn-outline"
+            onClick={handleDemoSubmit}
+            disabled={isLoading}
+            style={{ padding: '8px 16px', fontSize: '13px' }}
+          >
+            {isLoading ? 'Loading...' : 'Explore Demo Mode'}
+          </button>
+        </div>
+
+        <p className="signin-privacy-note" style={{ marginTop: '16px' }}>
+          Read-only access to repositories. We store commit activity counts and dates, never code.
+        </p>
       </div>
 
       {/* Right Column: Static Preview of Overview */}

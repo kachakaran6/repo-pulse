@@ -263,6 +263,35 @@ export const App: React.FC = () => {
     }
   };
 
+  // Personal Access Token Login
+  const handleTokenLogin = async (token: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.loginWithToken(token);
+      await loadInitialData();
+      showToast(`Authenticated as ${res.user.login} and repositories synced!`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Token authentication failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Connect Token from Settings
+  const handleConnectToken = async (token: string) => {
+    const res = await api.connectToken(token);
+    await loadInitialData();
+    showToast(res.message || 'Token connected and synced');
+  };
+
+  // Disconnect Token from Settings
+  const handleDisconnectToken = async () => {
+    const res = await api.disconnectToken();
+    await loadInitialData();
+    showToast(res.message || 'Token disconnected');
+  };
+
   return (
     <Shell
       activeTab={activeTab}
@@ -299,7 +328,11 @@ export const App: React.FC = () => {
           <SkeletonRow />
         </div>
       ) : !user ? (
-        <OnboardingView onDemoLogin={handleDemoLogin} isLoading={isLoading} />
+        <OnboardingView
+          onDemoLogin={handleDemoLogin}
+          onTokenLogin={handleTokenLogin}
+          isLoading={isLoading}
+        />
       ) : (
         <>
           {activeTab === 'overview' && (
@@ -334,6 +367,8 @@ export const App: React.FC = () => {
               settings={settings}
               installation={installation}
               onUpdateSettings={handleUpdateSettings}
+              onConnectToken={handleConnectToken}
+              onDisconnectToken={handleDisconnectToken}
               onExportData={handleExportData}
               onDeleteAccount={handleDeleteAccount}
             />

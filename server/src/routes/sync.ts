@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, syncRateLimiter } from '../auth/middleware.js';
 import { runUserSync } from '../sync/engine.js';
+import { syncReposWithPat, userTokens } from '../sync/github-pat.js';
 import { memoryDb } from '../db/index.js';
 
 export const syncRouter = Router();
@@ -34,8 +35,9 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
 
   lastUserSyncAttempt.set(userId, now);
 
-  // Trigger sync
-  const syncPromise = runUserSync(userId);
+  // Trigger sync with PAT if present or standard engine
+  const pat = userTokens.get(userId);
+  const syncPromise = pat ? syncReposWithPat(userId, pat) : runUserSync(userId);
 
   // In test / fast mode wait for completion; otherwise return job status
   if (req.query.wait === 'true' || process.env.NODE_ENV === 'test') {

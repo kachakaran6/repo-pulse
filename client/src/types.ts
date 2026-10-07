@@ -57,6 +57,7 @@ export interface UserProfile {
 
 export interface InstallationStatus {
   connected: boolean;
+  token_connected?: boolean;
   account_login?: string;
   github_installation_id?: number;
 }
