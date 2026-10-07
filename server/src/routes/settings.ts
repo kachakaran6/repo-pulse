@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
-import { memoryDb } from '../db/index.js';
-import { destroyAllUserSessions, COOKIE_NAME } from '../auth/session.js';
+import { db } from '../db/index.js';
+import { destroyAllUserSessions } from '../auth/session.js';
 import { thresholdsSchema } from '../core/status.js';
-import { validateGitHubToken, syncReposWithPat, userTokens } from '../sync/github-pat.js';
 import { logger } from '../utils/logger.js';
 
 export const settingsRouter = Router();
 
+// Apply requireAuth to all settings and profile routes
 settingsRouter.use(requireAuth);
 
 /**
@@ -17,15 +17,24 @@ settingsRouter.use(requireAuth);
  */
 settingsRouter.get('/me', async (req, res) => {
   const userId = req.user!.id;
-  const user = memoryDb.findUserById(userId);
-  const settings = memoryDb.getSettings(userId);
-  const installation = memoryDb.getInstallation(userId);
-  const lastSync = memoryDb.getLatestSyncRun(userId);
-  const isTokenConnected = userTokens.has(userId);
+  const user = await db.findUserById(userId);
+
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized', message: 'User not found' });
+    return;
+  }
+
+  const settings = await db.getSettings(userId);
+  const installation = await db.getInstallation(userId);
+  const lastSync = await db.getLatestSyncRun(userId);
 
   res.json({
+    id: String(user.id),
+    login: user.login,
+    avatarUrl: user.avatar_url,
+    hasInstallation: Boolean(installation),
     user: {
-      id: user.id,
+      id: String(user.id),
       login: user.login,
       name: user.name,
       avatar_url: user.avatar_url,
@@ -37,12 +46,11 @@ settingsRouter.get('/me', async (req, res) => {
       stale_days: settings.stale_days,
       theme: settings.theme,
     },
-    token_connected: isTokenConnected,
     installation: installation
       ? {
           connected: true,
           account_login: installation.account_login,
-          github_installation_id: installation.github_installation_id,
+          github_installation_id: String(installation.github_installation_id),
         }
       : {
           connected: false,
@@ -54,58 +62,6 @@ settingsRouter.get('/me', async (req, res) => {
           finished_at: lastSync.finished_at ? new Date(lastSync.finished_at).toISOString() : null,
         }
       : null,
-  });
-});
-
-/**
- * POST /api/token
- * Connect or update GitHub Personal Access Token and sync repositories
- */
-settingsRouter.post('/token', async (req, res) => {
-  const userId = req.user!.id;
-  const schema = z.object({
-    token: z.string().min(1, 'Token is required'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Validation Error', message: 'Token is required.' });
-    return;
-  }
-
-  try {
-    const rawToken = parsed.data.token.trim();
-    await validateGitHubToken(rawToken);
-
-    userTokens.set(userId, rawToken);
-    memoryDb.logAudit(userId, 'token_connected');
-
-    // Run sync immediately
-    const syncResult = await syncReposWithPat(userId, rawToken);
-
-    res.json({
-      ok: true,
-      message: `Personal Access Token connected. Synced ${syncResult.reposRead} repositories.`,
-      repos_read: syncResult.reposRead,
-    });
-  } catch (err: any) {
-    logger.error({ userId, error: err.message }, 'Failed to connect PAT');
-    res.status(400).json({ error: 'Token Error', message: err.message || 'Invalid Personal Access Token' });
-  }
-});
-
-/**
- * DELETE /api/token
- * Disconnect GitHub Personal Access Token
- */
-settingsRouter.delete('/token', async (req, res) => {
-  const userId = req.user!.id;
-  userTokens.delete(userId);
-  memoryDb.logAudit(userId, 'token_disconnected');
-
-  res.json({
-    ok: true,
-    message: 'Personal Access Token disconnected.',
   });
 });
 
@@ -129,7 +85,7 @@ settingsRouter.patch('/settings', async (req, res) => {
     return;
   }
 
-  const current = memoryDb.getSettings(userId);
+  const current = await db.getSettings(userId);
   const newActive = parsed.data.active_days ?? current.active_days;
   const newCooling = parsed.data.cooling_days ?? current.cooling_days;
   const newStale = parsed.data.stale_days ?? current.stale_days;
@@ -150,14 +106,14 @@ settingsRouter.patch('/settings', async (req, res) => {
     return;
   }
 
-  const updated = memoryDb.updateSettings(userId, {
+  const updated = await db.updateSettings(userId, {
     active_days: newActive,
     cooling_days: newCooling,
     stale_days: newStale,
     theme: parsed.data.theme ?? current.theme,
   });
 
-  memoryDb.logAudit(userId, 'settings_updated', parsed.data);
+  await db.logAudit(userId, 'settings_updated', parsed.data);
 
   res.json({
     ok: true,
@@ -176,16 +132,16 @@ settingsRouter.patch('/settings', async (req, res) => {
  */
 settingsRouter.get('/export', async (req, res) => {
   const userId = req.user!.id;
-  const user = memoryDb.findUserById(userId);
-  const settings = memoryDb.getSettings(userId);
-  const repos = memoryDb.getUserRepos(userId);
-  const audit = memoryDb.getAuditLogs(userId);
+  const user = await db.findUserById(userId);
+  const settings = await db.getSettings(userId);
+  const repos = await db.getUserRepos(userId);
+  const audit = await db.getAuditLogs(userId);
 
   const exportData = {
     version: '2.0.0',
     exported_at: new Date().toISOString(),
     user: {
-      id: user.id,
+      id: String(user.id),
       login: user.login,
       name: user.name,
       avatar_url: user.avatar_url,
@@ -193,8 +149,8 @@ settingsRouter.get('/export', async (req, res) => {
     },
     settings,
     repositories: repos.map((r) => ({
-      id: r.id,
-      github_repo_id: r.github_repo_id,
+      id: String(r.id),
+      github_repo_id: String(r.github_repo_id),
       full_name: r.full_name,
       is_private: r.is_private,
       default_branch: r.default_branch,
@@ -207,10 +163,13 @@ settingsRouter.get('/export', async (req, res) => {
     audit_logs: audit,
   };
 
-  memoryDb.logAudit(userId, 'data_exported');
+  await db.logAudit(userId, 'data_exported');
 
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="repopulse-export-${user.login}-${new Date().toISOString().split('T')[0]}.json"`);
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="repopulse-export-${user.login}-${new Date().toISOString().split('T')[0]}.json"`
+  );
   res.send(JSON.stringify(exportData, null, 2));
 });
 
@@ -221,15 +180,11 @@ settingsRouter.get('/export', async (req, res) => {
 settingsRouter.delete('/account', async (req, res) => {
   const userId = req.user!.id;
 
-  // Log audit before wipe
-  memoryDb.logAudit(userId, 'account_deleted');
+  logger.info({ userId }, 'Processing permanent user account deletion');
 
-  // Cascade wipe all tenant data
-  memoryDb.deleteUserAccount(userId);
+  // Cascade wipe all tenant data from Postgres
+  await db.deleteUserAccount(userId);
   await destroyAllUserSessions(userId, res);
-
-  res.clearCookie(COOKIE_NAME);
-  res.clearCookie('sid');
 
   res.json({
     ok: true,
