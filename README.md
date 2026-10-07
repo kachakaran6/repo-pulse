@@ -1,65 +1,104 @@
-# RepoPulse v2 (SaaS)
+# RepoPulse v3 — GitHub Repository Ledger & Triage
 
 RepoPulse is a quiet, decision-focused repository ledger for developers. It groups your GitHub repositories by recent commit activity and helps you triage projects into **Keep going**, **Pause**, or **Retire**.
 
-## Architecture & Security
+---
 
-- **Frontend:** React 18 + Vite + TypeScript with token-only CSS design system (Light & Dark themes, Schibsted Grotesk typography, tabular numbers).
+## 🎨 Design System & Philosophy (V3)
+
+RepoPulse v3 uses a strictly disciplined design system built on **heat as the single chromatic hue**:
+- **Active (<= 7 days):** Ember `#D2382A` (Light) / `#F2664F` (Dark) — *"Fire is burning"*
+- **Cooling (<= 14 days):** Warm Ochre `#B87400` (Light) / `#F2B14C` (Dark) — *"Still warm"*
+- **Stale (<= 30 days):** Slate `#4A7BA3` (Light) / `#86AED0` (Dark) — *"Cooled off"*
+- **Dead (> 30 days):** Ash `#7B858D` (Light) / `#8B9399` (Dark) — *"Extinguished"*
+
+### Interface Highlights
+- **Unboxed 28px Summary Headline:** *"You committed to 8 repos this week. 7 went cold."*
+- **12px Segmented Heat Bar:** Proportional distribution bar with interactive status filters.
+- **Hairline Ledger Rows:** Clean 1px border list with stripped user prefixes, lock icons for private repos, and 90-day commit activity strips.
+- **40px Mono Triage Interface:** Keyboard-driven triage (`[K]` Keep, `[P]` Pause, `[R]` Retire, `[Z]` Undo).
+- **Inline Sentence Settings:** Fluid threshold sentence editing (`Active up to [ 7 ] days...`) with live validation.
+
+---
+
+## 🏗️ Architecture & Security
+
+- **Frontend:** React 18 + Vite + TypeScript with pure tokenized CSS (`tokens.css` / `tokens-v3.css`).
 - **Backend:** Node 20 + Express + TypeScript + Drizzle ORM.
-- **Database:** PostgreSQL 15+ with strict Row-Level Security (RLS) on all tenant tables (`users`, `sessions`, `repos`, `repo_activity`, `repo_meta`, `settings`, `sync_runs`, `audit_log`).
-- **Security:** Target OWASP ASVS Level 2 — 256-bit hashed sessions, `__Host-sid` HttpOnly cookies (7-day idle / 30-day absolute lifetime), CSRF defense, CSP / HSTS / nosniff security headers, HMAC-SHA256 constant-time webhook verification, rate limiting, and zero user token storage.
+- **Database:** PostgreSQL 16 with Row-Level Security (RLS) policies on all tenant tables (`users`, `sessions`, `repos`, `repo_activity`, `repo_meta`, `settings`, `sync_runs`, `audit_log`).
+- **Security (OWASP ASVS Level 2):**
+  - Zero long-lived GitHub user tokens stored in DB or transmitted to client.
+  - 256-bit hashed session IDs with `__Host-sid` / `sid` HttpOnly, SameSite cookies.
+  - Automatic session expiration: 7-day idle timeout, 30-day absolute lifetime, plus "Sign Out Everywhere" (`/auth/logout-all`).
+  - Custom header CSRF verification on all mutating requests (`X-Requested-With` / `X-RepoPulse-Client`).
+  - Strict Content Security Policy (CSP), HSTS, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
+  - Constant-time HMAC-SHA256 GitHub App webhook signature verification (`X-Hub-Signature-256`).
+  - Gated demo endpoints blocked with `403 Forbidden` in production (`NODE_ENV === 'production'`).
 
-## Quick Start (Local Development)
+---
 
-### 1. Start Database & Backend
-```bash
-# In /server
-npm install
-npm run dev
-```
-*Note: If PostgreSQL is not configured in `.env`, the server automatically initializes a high-performance in-memory tenant store for instant development & test execution.*
+## 🚀 Quick Start (Local Development)
 
-### 2. Start Frontend Client
-```bash
-# In /client
-npm install
-npm run dev
-```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### 3. Instant Demo Mode
-Click **Launch Demo** on the sign-in screen to instantly explore 30+ simulated repositories across Active, Cooling, Stale, and Dead statuses with complete 90-day commit strips.
-
-## Testing & Verification
-
-Run the full Vitest suite (status logic, tenancy isolation, session lifecycle, CSRF & security headers, webhook HMAC verification, and data export/deletion):
+### 1. Start Server
 ```bash
 cd server
-npm test
+npm install
+npm run dev
+```
+*Note: If PostgreSQL is not configured in `.env`, the server automatically starts a zero-config in-memory tenant database.*
+
+### 2. Start Client
+```bash
+cd client
+npm install
+npm run dev
 ```
 
-## Docker Deployment
+### 3. Open Demo Mode
+Open the following URL in your browser for instant demo access:
+```
+http://localhost:5173/?auth_demo=true
+```
 
-Run the complete production stack (Postgres 16 + Multi-stage Node runner):
+---
+
+## 🔑 GitHub App Setup (Production SaaS)
+
+To connect live GitHub organizations and user accounts in production:
+
+1. Create a **GitHub App** under your GitHub account or organization settings.
+2. Set **Homepage URL** to `https://your-domain.com`.
+3. Set **Authorization callback URL** to `https://your-domain.com/auth/github/callback`.
+4. Set **Webhook URL** to `https://your-domain.com/webhooks/github`.
+5. Grant repository permissions:
+   - **Repository contents:** Read-only (for commit activity)
+   - **Repository metadata:** Read-only
+6. Subscribe to webhook events: `push`, `repository`, `installation`.
+7. Generate a Private Key (`.pem`) and copy the App ID, Client ID, Client Secret, and Webhook Secret to `server/.env`.
+
+---
+
+## 🧪 Quality Gates & Verification
+
+```bash
+# Run server test suite (30 Vitest tests)
+cd server
+npm test
+
+# Run client TypeScript typecheck
+cd client
+npm run typecheck
+
+# Run client production build
+npm run build
+```
+
+---
+
+## 🐳 Docker Deployment
+
+Run the complete multi-tenant production stack with PostgreSQL 16:
 ```bash
 docker compose up --build
 ```
 Access the application at [http://localhost:4000](http://localhost:4000).
-
-## Endpoints Summary
-
-- `GET /healthz` - Health and uptime verification
-- `GET /auth/github/start` - GitHub OAuth authorize flow
-- `GET /auth/github/callback` - OAuth state and user token exchange
-- `POST /auth/demo-login` - Instant testing sign-in
-- `POST /auth/logout` - Invalidate current session
-- `POST /auth/logout-all` - Sign out everywhere
-- `GET /api/me` - Authenticated user profile, settings, and installation state
-- `GET /api/repos` - Repositories with computed statuses & commit activity strips
-- `PATCH /api/repos/:id/meta` - Update label, goal date, note, or triage decision
-- `POST /api/sync` - Trigger repository synchronization (5-minute cooldown)
-- `GET /api/sync/status` - Current sync job status
-- `PATCH /api/settings` - Update activity status thresholds and theme
-- `GET /api/export` - Download complete account data ledger (JSON)
-- `DELETE /api/account` - Permanent account & tenant data cascade deletion
-- `POST /webhooks/github` - GitHub App webhook receiver (HMAC verified)
