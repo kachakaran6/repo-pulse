@@ -4,8 +4,10 @@
 FROM node:20-alpine AS client-builder
 WORKDIR /app/client
 
+ENV NODE_ENV=development
+
 COPY client/package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY client/ ./
 RUN npm run build
@@ -14,8 +16,10 @@ RUN npm run build
 FROM node:20-alpine AS server-builder
 WORKDIR /app/server
 
+ENV NODE_ENV=development
+
 COPY server/package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY server/ ./
 RUN npm run build
@@ -32,6 +36,7 @@ RUN npm ci --omit=dev
 
 COPY --from=server-builder /app/server/dist ./dist
 COPY --from=server-builder /app/server/src/db/migrations.sql ./dist/db/migrations.sql
+COPY --from=server-builder /app/server/src/db/migrations.sql ./src/db/migrations.sql
 COPY --from=client-builder /app/client/dist ./public
 
 EXPOSE 4000

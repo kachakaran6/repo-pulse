@@ -27,8 +27,26 @@ export async function initDb(): Promise<boolean> {
   }
 
   try {
-    const migrationPath = path.resolve(__dirname, 'migrations.sql');
-    const sql = fs.readFileSync(migrationPath, 'utf8');
+    const candidatePaths = [
+      path.resolve(__dirname, 'migrations.sql'),
+      path.resolve(__dirname, '../../src/db/migrations.sql'),
+      path.resolve(process.cwd(), 'dist/db/migrations.sql'),
+      path.resolve(process.cwd(), 'src/db/migrations.sql'),
+      path.resolve(process.cwd(), 'server/src/db/migrations.sql'),
+    ];
+
+    let sql: string | null = null;
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        sql = fs.readFileSync(p, 'utf8');
+        break;
+      }
+    }
+
+    if (!sql) {
+      throw new Error(`migrations.sql not found in candidate paths: ${candidatePaths.join(', ')}`);
+    }
+
     await pool.query(sql);
     logger.info('Database schema and RLS policies successfully initialized and verified.');
     return true;
