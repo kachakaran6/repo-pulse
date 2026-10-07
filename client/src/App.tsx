@@ -279,6 +279,36 @@ export const App: React.FC = () => {
     }
   };
 
+  // Cloud Account Signup
+  const handleSignup = async (username: string, password: string, token?: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.signupUser({ username, password, token });
+      await loadInitialData();
+      showToast(`Account created! Welcome, ${res.user.login}`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Signup failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cloud Account Login
+  const handlePasswordLogin = async (username: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.loginUser({ username, password });
+      await loadInitialData();
+      showToast(`Welcome back, ${res.user.login}!`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Login failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Connect Token from Settings
   const handleConnectToken = async (token: string) => {
     const res = await api.connectToken(token);
@@ -332,6 +362,8 @@ export const App: React.FC = () => {
         <OnboardingView
           onDemoLogin={handleDemoLogin}
           onTokenLogin={handleTokenLogin}
+          onSignup={handleSignup}
+          onLogin={handlePasswordLogin}
           isLoading={isLoading}
         />
       ) : (
