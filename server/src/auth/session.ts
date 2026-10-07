@@ -4,7 +4,7 @@ import { env } from '../config/env.js';
 import { memoryDb, pool } from '../db/index.js';
 import { logger } from '../utils/logger.js';
 
-export const COOKIE_NAME = env.NODE_ENV === 'production' ? '__Host-sid' : 'sid';
+export const COOKIE_NAME = 'sid';
 export const IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const ABSOLUTE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -52,10 +52,12 @@ export async function createSession(
     memoryDb.createSession({ id_hash: tokenHash, user_id: userId, expires_at: expiresAt, ip_hash: ipHash, ua });
   }
 
-  // Set secure cookie
-  res.cookie(COOKIE_NAME, rawToken, {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+
+  // Set standard session cookie with dynamic secure detection
+  res.cookie('sid', rawToken, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
+    secure: isHttps,
     sameSite: 'lax',
     path: '/',
     maxAge: ABSOLUTE_LIFETIME_MS,
@@ -156,12 +158,8 @@ export async function destroySession(rawToken: string, res?: Response): Promise<
   }
 
   if (res) {
-    res.clearCookie(COOKIE_NAME, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-    });
+    res.clearCookie('sid', { path: '/' });
+    res.clearCookie('__Host-sid', { path: '/' });
   }
 }
 
@@ -180,11 +178,7 @@ export async function destroyAllUserSessions(userId: number, res?: Response): Pr
   }
 
   if (res) {
-    res.clearCookie(COOKIE_NAME, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-    });
+    res.clearCookie('sid', { path: '/' });
+    res.clearCookie('__Host-sid', { path: '/' });
   }
 }

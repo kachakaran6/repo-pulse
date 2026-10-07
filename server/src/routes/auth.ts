@@ -107,7 +107,7 @@ authRouter.post('/demo-login', async (req, res) => {
     avatar_url: `https://avatars.githubusercontent.com/u/100001?v=4`,
   });
 
-  await createSession(user.id, req, res);
+  const sessionToken = await createSession(user.id, req, res);
   memoryDb.logAudit(user.id, 'user_logged_in', { method: 'demo' });
 
   // Run initial sync
@@ -121,6 +121,7 @@ authRouter.post('/demo-login', async (req, res) => {
       name: user.name,
       avatar_url: user.avatar_url,
     },
+    token: sessionToken,
   });
 });
 
@@ -152,7 +153,7 @@ authRouter.post('/token-login', async (req, res) => {
     // Store token in active session store
     userTokens.set(user.id, rawToken);
 
-    await createSession(user.id, req, res);
+    const sessionToken = await createSession(user.id, req, res);
     memoryDb.logAudit(user.id, 'user_logged_in', { method: 'pat' });
 
     // Run initial live sync with PAT
@@ -166,6 +167,7 @@ authRouter.post('/token-login', async (req, res) => {
         name: user.name,
         avatar_url: user.avatar_url,
       },
+      token: sessionToken,
     });
   } catch (err: any) {
     logger.error({ error: err.message }, 'PAT login failed');
@@ -236,7 +238,7 @@ authRouter.post('/signup', async (req, res) => {
     }
   }
 
-  await createSession(newUser.id, req, res);
+  const sessionToken = await createSession(newUser.id, req, res);
   memoryDb.logAudit(newUser.id, 'user_signed_up', { with_token: Boolean(cleanToken) });
 
   res.json({
@@ -247,6 +249,7 @@ authRouter.post('/signup', async (req, res) => {
       name: newUser.name,
       avatar_url: newUser.avatar_url,
     },
+    token: sessionToken,
   });
 });
 
@@ -286,7 +289,7 @@ authRouter.post('/login', async (req, res) => {
     }
   }
 
-  await createSession(user.id, req, res);
+  const sessionToken = await createSession(user.id, req, res);
   memoryDb.logAudit(user.id, 'user_logged_in', { method: 'password' });
 
   res.json({
@@ -297,6 +300,7 @@ authRouter.post('/login', async (req, res) => {
       name: user.name,
       avatar_url: user.avatar_url,
     },
+    token: sessionToken,
   });
 });
 
