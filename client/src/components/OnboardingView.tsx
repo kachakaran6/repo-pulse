@@ -1,529 +1,450 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Thermometer, Keyboard, ShieldCheck, Check, Minus } from 'lucide-react';
 
-interface OnboardingViewProps {
-  onDemoLogin: (username: string) => Promise<void>;
-  onTokenLogin: (token: string) => Promise<void>;
-  onSignup: (username: string, password: string, token?: string) => Promise<void>;
-  onLogin: (username: string, password: string) => Promise<void>;
-  isLoading: boolean;
+interface SampleRepo {
+  name: string;
+  status: 'active' | 'cooling' | 'stale' | 'dead';
+  statusLabel: string;
+  meta: string;
+  activity: number[];
 }
 
-type AuthMode = 'ephemeral' | 'signup' | 'login' | 'demo';
-type PreviewFilter = 'all' | 'active' | 'cooling' | 'stale' | 'dead';
+// Generate 90-day commit activity profiles for sample preview
+function generateSampleActivity(pattern: 'active' | 'cooling' | 'stale' | 'dead'): number[] {
+  const days: number[] = new Array(90).fill(0);
+  if (pattern === 'active') {
+    // Recent activity in last 7 days + regular history
+    [89, 88, 86, 84, 82, 80, 78, 75, 71, 68, 64, 60, 55, 52, 48, 44, 40, 35, 30, 25, 20, 15, 10, 5, 2, 0].forEach((idx) => {
+      days[89 - idx] = Math.floor((idx % 4) + 1);
+    });
+    days[89] = 3;
+    days[88] = 5;
+    days[86] = 2;
+  } else if (pattern === 'cooling') {
+    // Last commit was 9-12 days ago
+    [75, 72, 68, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10].forEach((idx) => {
+      days[89 - idx] = Math.floor((idx % 3) + 1);
+    });
+  } else if (pattern === 'stale') {
+    // Last commit was 18-24 days ago
+    [65, 60, 55, 50, 42, 35, 28, 20].forEach((idx) => {
+      days[89 - idx] = Math.floor((idx % 3) + 1);
+    });
+  } else {
+    // Dead: no commits in last 45+ days
+    [35, 28, 15, 5].forEach((idx) => {
+      days[89 - idx] = 1;
+    });
+  }
+  return days;
+}
 
-export const OnboardingView: React.FC<OnboardingViewProps> = ({
-  onDemoLogin,
-  onTokenLogin,
-  onSignup,
-  onLogin,
-  isLoading,
-}) => {
-  const [authMode, setAuthMode] = useState<AuthMode>('ephemeral');
+const SAMPLE_REPOS: SampleRepo[] = [
+  {
+    name: 'repopulse',
+    status: 'active',
+    statusLabel: 'Active',
+    meta: 'Last commit today, TypeScript',
+    activity: generateSampleActivity('active'),
+  },
+  {
+    name: 'auth-shield',
+    status: 'active',
+    statusLabel: 'Active',
+    meta: 'Last commit yesterday, Go',
+    activity: generateSampleActivity('active'),
+  },
+  {
+    name: 'metrics-exporter',
+    status: 'cooling',
+    statusLabel: 'Cooling',
+    meta: 'Last commit 9 days ago, Go',
+    activity: generateSampleActivity('cooling'),
+  },
+  {
+    name: 'customer-crm',
+    status: 'stale',
+    statusLabel: 'Stale',
+    meta: 'Last commit 18 days ago, TypeScript',
+    activity: generateSampleActivity('stale'),
+  },
+];
 
-  // Form states
-  const [patToken, setPatToken] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [cloudToken, setCloudToken] = useState('');
-  const [demoUser, setDemoUser] = useState('developer');
+const TRIAGE_SAMPLE_ACTIVITY = generateSampleActivity('cooling');
 
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showTokenHelp, setShowTokenHelp] = useState(false);
-
-  // Interactive Live Preview Filter State
-  const [previewFilter, setPreviewFilter] = useState<PreviewFilter>('all');
-
-  // Handle Ephemeral Token Login
-  const handleEphemeralSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-    if (!patToken.trim()) {
-      setFormError('Please enter a GitHub Personal Access Token.');
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await onTokenLogin(patToken.trim());
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to authenticate with GitHub token');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handle Cloud Sign Up
-  const handleSignupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-    if (!username.trim() || !password.trim()) {
-      setFormError('Username and password are required.');
-      return;
-    }
-    if (password.length < 6) {
-      setFormError('Password must be at least 6 characters.');
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await onSignup(username.trim(), password, cloudToken.trim() || undefined);
-    } catch (err: any) {
-      setFormError(err.message || 'Signup failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handle Cloud Login
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-    if (!username.trim() || !password.trim()) {
-      setFormError('Username and password are required.');
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await onLogin(username.trim(), password);
-    } catch (err: any) {
-      setFormError(err.message || 'Login failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Sample data for live interactive preview
-  const sampleRepos = [
-    { name: 'repopulse', status: 'active', desc: 'Last commit today • TypeScript • SaaS', activity: [2, 4, 0, 1, 3, 0, 5, 2, 4] },
-    { name: 'auth-shield', status: 'active', desc: 'Last commit yesterday • Go • Security', activity: [0, 2, 1, 4, 3, 0, 2, 1, 3] },
-    { name: 'metrics-exporter', status: 'cooling', desc: 'Last commit 9 days ago • Go • Infrastructure', activity: [0, 0, 0, 2, 1, 0, 0, 0, 0] },
-    { name: 'react-virtual-ledger', status: 'cooling', desc: 'Last commit 12 days ago • TypeScript • Library', activity: [0, 0, 1, 0, 2, 0, 0, 0, 0] },
-    { name: 'customer-crm-v1', status: 'stale', desc: 'Last commit 18 days ago • TypeScript • Full ERP', activity: [0, 0, 0, 0, 0, 0, 1, 0, 0] },
-    { name: 'docker-pg-cluster', status: 'stale', desc: 'Last commit 24 days ago • Shell • Infrastructure', activity: [0, 0, 0, 0, 0, 0, 0, 1, 0] },
-    { name: 'angularjs-legacy-portal', status: 'dead', desc: 'Last commit 45 days ago • JavaScript • Legacy', activity: [0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { name: 'abandoned-solidity-dao', status: 'dead', desc: 'Last commit 78 days ago • Solidity • Experiment', activity: [0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  ];
-
-  const filteredSampleRepos = sampleRepos.filter((r) => {
-    if (previewFilter === 'all') return true;
-    return r.status === previewFilter;
-  });
-
+export const OnboardingView: React.FC = () => {
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '16px 0 64px 0' }}>
-      {/* Landing Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '24px', borderBottom: '1px solid var(--line)', marginBottom: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="brand-dot" style={{ width: '10px', height: '10px' }} />
-          <span style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '-0.02em' }}>
+    <div className="landing-page">
+      {/* 1. Header (Once, wordmark left text only, sign in actions right) */}
+      <header className="landing-header">
+        <div className="landing-container landing-header-inner">
+          <a href="/" className="landing-wordmark">
             RepoPulse
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button
-            type="button"
-            className="btn-outline"
-            style={{ fontSize: '12px', padding: '6px 12px' }}
-            onClick={() => onDemoLogin('developer')}
-            disabled={isLoading}
-          >
-            Explore Demo
-          </button>
-          <a
-            href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-ink"
-            style={{ fontSize: '12px', padding: '6px 12px' }}
-          >
-            Create GitHub Token ↗
           </a>
+
+          <nav className="landing-nav" aria-label="Main Navigation">
+            <a href="/auth/github/start" className="landing-nav-link">
+              Sign in
+            </a>
+            <a href="/auth/github/start" className="landing-btn-primary">
+              Sign in with GitHub
+            </a>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      {/* Main 2-Column Hero */}
-      <div className="signin-layout" style={{ gap: '48px', alignItems: 'flex-start' }}>
-        {/* Left Column: Mission + Multi-Mode Auth Hub */}
-        <div className="signin-left" style={{ maxWidth: '520px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', backgroundColor: 'var(--surface-2)', borderRadius: '12px', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '16px', border: '1px solid var(--line)' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--heat-active)' }} />
-            V3 HEAT ENGINE • READ-ONLY COMMIT LEDGER
-          </div>
+      {/* 2. Hero (Two columns, left aligned) */}
+      <section className="landing-section landing-hero-section">
+        <div className="landing-container landing-hero-grid">
+          {/* Left Column */}
+          <div className="landing-hero-content">
+            <h1 className="landing-hero-h1">
+              See which repos you are still working on.
+            </h1>
 
-          <h1 className="signin-headline" style={{ fontSize: '36px', lineHeight: 1.15, fontWeight: 800, marginBottom: '16px', letterSpacing: '-0.03em' }}>
-            The quiet ledger for hyperactive developers.
-          </h1>
+            <p className="landing-hero-sub">
+              RepoPulse reads your GitHub commits and sorts every repo into Active, Cooling, Stale or Dead. Then you decide what to keep, pause or retire.
+            </p>
 
-          <p className="signin-subhead" style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--ink-2)', marginBottom: '24px' }}>
-            Stop drowning across dozens of unmaintained repositories. RepoPulse inspects your 90-day GitHub commit activity, groups projects by temperature, and helps you triage what to <strong>Keep</strong>, <strong>Pause</strong>, or <strong>Retire</strong>.
-          </p>
-
-          {/* Tabbed Auth Container */}
-          <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '20px', boxShadow: 'none' }}>
-            {/* Auth Mode Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '16px', gap: '4px' }}>
-              <button
-                type="button"
-                className={`nav-tab ${authMode === 'ephemeral' ? 'active' : ''}`}
-                style={{ fontSize: '13px', padding: '6px 12px' }}
-                onClick={() => { setAuthMode('ephemeral'); setFormError(null); }}
-              >
-                ⚡ Session Token
-              </button>
-              <button
-                type="button"
-                className={`nav-tab ${authMode === 'signup' ? 'active' : ''}`}
-                style={{ fontSize: '13px', padding: '6px 12px' }}
-                onClick={() => { setAuthMode('signup'); setFormError(null); }}
-              >
-                ☁️ Cloud Sign Up
-              </button>
-              <button
-                type="button"
-                className={`nav-tab ${authMode === 'login' ? 'active' : ''}`}
-                style={{ fontSize: '13px', padding: '6px 12px' }}
-                onClick={() => { setAuthMode('login'); setFormError(null); }}
-              >
-                🔑 Log In
-              </button>
-              <button
-                type="button"
-                className={`nav-tab ${authMode === 'demo' ? 'active' : ''}`}
-                style={{ fontSize: '13px', padding: '6px 12px' }}
-                onClick={() => { setAuthMode('demo'); setFormError(null); }}
-              >
-                🚀 Demo
-              </button>
+            <div className="landing-hero-actions">
+              <a href="/auth/github/start" className="landing-btn-primary">
+                Sign in with GitHub
+              </a>
+              <a href="#sample-preview" className="landing-link-quiet">
+                See a sample
+              </a>
             </div>
 
-            {/* Error Message */}
-            {formError && (
-              <div style={{ padding: '8px 12px', backgroundColor: 'var(--surface-2)', borderLeft: '3px solid var(--heat-active)', color: 'var(--heat-active)', fontSize: '13px', marginBottom: '16px', borderRadius: '2px' }}>
-                {formError}
+            <p className="landing-hero-note">
+              Read-only access to the repos you choose.
+            </p>
+          </div>
+
+          {/* Right Column: Static Preview of Overview */}
+          <div id="sample-preview" className="landing-preview-panel">
+            <div className="landing-preview-header">
+              <span className="landing-preview-label">Sample data</span>
+              <h2 className="landing-preview-title">
+                You committed to 8 repos this week. 7 went cold.
+              </h2>
+            </div>
+
+            {/* Segmented Heat Bar */}
+            <div className="landing-heat-bar" role="img" aria-label="Repository status distribution bar">
+              <div className="landing-heat-segment heat-active-bg" style={{ width: '35%' }} />
+              <div className="landing-heat-segment heat-cooling-bg" style={{ width: '25%' }} />
+              <div className="landing-heat-segment heat-stale-bg" style={{ width: '20%' }} />
+              <div className="landing-heat-segment heat-dead-bg" style={{ width: '20%' }} />
+            </div>
+
+            {/* Heat Bar Legend */}
+            <div className="landing-heat-legend">
+              <div className="landing-legend-item">
+                <span className="landing-swatch heat-active-bg" />
+                <span>Active 2</span>
               </div>
-            )}
-
-            {/* Mode 1: Ephemeral / Local Session (Zero Storage) */}
-            {authMode === 'ephemeral' && (
-              <form onSubmit={handleEphemeralSubmit}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}>
-                    GitHub Personal Access Token
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowTokenHelp(!showTokenHelp)}
-                    style={{ background: 'none', border: 'none', color: 'var(--heat-stale)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-                  >
-                    {showTokenHelp ? 'Hide guide' : 'Get token in 30s ↗'}
-                  </button>
-                </div>
-
-                {showTokenHelp && (
-                  <div style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--ink-2)', backgroundColor: 'var(--surface-2)', padding: '10px 12px', borderRadius: 'var(--r)', marginBottom: '12px', border: '1px solid var(--line)' }}>
-                    1. Open <a href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--heat-active)', fontWeight: 600, textDecoration: 'underline' }}>Pre-filled GitHub Token Creator ↗</a><br />
-                    2. Check <code style={{ fontFamily: 'var(--mono)' }}>repo</code> & <code style={{ fontFamily: 'var(--mono)' }}>read:user</code> scopes.<br />
-                    3. Click <strong>Generate token</strong> and paste below.
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-                  <input
-                    type="password"
-                    className="clean-input"
-                    style={{ flex: 1, padding: '8px 12px', fontSize: '13px', fontFamily: 'var(--mono)' }}
-                    placeholder="Paste token (ghp_... or github_pat_...)"
-                    value={patToken}
-                    onChange={(e) => setPatToken(e.target.value)}
-                  />
-                  <button
-                    type="submit"
-                    className="btn-ink"
-                    disabled={isSubmitting || isLoading}
-                    style={{ padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}
-                  >
-                    {isSubmitting ? 'Syncing...' : 'Connect & Sync'}
-                  </button>
-                </div>
-
-                <div style={{ fontSize: '11px', color: 'var(--ink-2)', lineHeight: 1.5 }}>
-                  🛡️ <strong>Zero Server Storage:</strong> Your token is stored in your secure browser session only. It is never persisted in any database and vanishes on logout.
-                </div>
-              </form>
-            )}
-
-            {/* Mode 2: Cloud Sign Up (Encrypted Persistence) */}
-            {authMode === 'signup' && (
-              <form onSubmit={handleSignupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Username</label>
-                  <input
-                    type="text"
-                    className="clean-input"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: '13px' }}
-                    placeholder="Choose a username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Password (min 6 chars)</label>
-                  <input
-                    type="password"
-                    className="clean-input"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: '13px' }}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600 }}>GitHub Token (Optional)</label>
-                    <a
-                      href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: '11px', color: 'var(--heat-stale)', textDecoration: 'underline' }}
-                    >
-                      Get token ↗
-                    </a>
-                  </div>
-                  <input
-                    type="password"
-                    className="clean-input"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: '13px', fontFamily: 'var(--mono)' }}
-                    placeholder="ghp_... (for persistent cloud sync across devices)"
-                    value={cloudToken}
-                    onChange={(e) => setCloudToken(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn-ink"
-                  disabled={isSubmitting || isLoading}
-                  style={{ width: '100%', padding: '9px', fontSize: '13px', marginTop: '4px' }}
-                >
-                  {isSubmitting ? 'Creating account...' : 'Create Cloud Account'}
-                </button>
-
-                <div style={{ fontSize: '11px', color: 'var(--ink-2)', textAlign: 'center' }}>
-                  Already registered? <button type="button" onClick={() => setAuthMode('login')} style={{ background: 'none', border: 'none', color: 'var(--heat-active)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Sign in</button>
-                </div>
-              </form>
-            )}
-
-            {/* Mode 3: Cloud Login */}
-            {authMode === 'login' && (
-              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Username</label>
-                  <input
-                    type="text"
-                    className="clean-input"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: '13px' }}
-                    placeholder="Your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Password</label>
-                  <input
-                    type="password"
-                    className="clean-input"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: '13px' }}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn-ink"
-                  disabled={isSubmitting || isLoading}
-                  style={{ width: '100%', padding: '9px', fontSize: '13px', marginTop: '4px' }}
-                >
-                  {isSubmitting ? 'Signing in...' : 'Sign In to Cloud Vault'}
-                </button>
-
-                <div style={{ fontSize: '11px', color: 'var(--ink-2)', textAlign: 'center' }}>
-                  Need an account? <button type="button" onClick={() => setAuthMode('signup')} style={{ background: 'none', border: 'none', color: 'var(--heat-active)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Sign up</button>
-                </div>
-              </form>
-            )}
-
-            {/* Mode 4: Instant Demo Preview */}
-            {authMode === 'demo' && (
-              <div>
-                <p style={{ fontSize: '13px', color: 'var(--ink-2)', marginBottom: '14px', lineHeight: 1.5 }}>
-                  Explore the full RepoPulse suite with 30 simulated repositories across Active, Cooling, Stale, and Dead temperatures.
-                </p>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    className="clean-input"
-                    style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
-                    value={demoUser}
-                    onChange={(e) => setDemoUser(e.target.value)}
-                    placeholder="Demo username"
-                  />
-                  <button
-                    type="button"
-                    className="btn-ink"
-                    onClick={() => onDemoLogin(demoUser.trim() || 'developer')}
-                    disabled={isLoading}
-                    style={{ padding: '8px 16px', fontSize: '13px' }}
-                  >
-                    Launch Demo
-                  </button>
-                </div>
+              <div className="landing-legend-item">
+                <span className="landing-swatch heat-cooling-bg" />
+                <span>Cooling 2</span>
               </div>
-            )}
-          </div>
-        </div>
+              <div className="landing-legend-item">
+                <span className="landing-swatch heat-stale-bg" />
+                <span>Stale 2</span>
+              </div>
+              <div className="landing-legend-item">
+                <span className="landing-swatch heat-dead-bg" />
+                <span>Dead 2</span>
+              </div>
+            </div>
 
-        {/* Right Column: Interactive Live Ledger Simulator */}
-        <div className="sample-preview-card" style={{ flex: 1, minWidth: '320px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span className="sample-badge">Interactive Live Simulator</span>
-            <span style={{ fontSize: '11px', color: 'var(--ink-2)', fontFamily: 'var(--mono)' }}>90-Day Sparklines</span>
-          </div>
+            {/* 4 Static Ledger Rows */}
+            <div className="landing-ledger-list">
+              {SAMPLE_REPOS.map((repo) => {
+                const heatColorClass =
+                  repo.status === 'active'
+                    ? 'heat-active'
+                    : repo.status === 'cooling'
+                    ? 'heat-cooling'
+                    : repo.status === 'stale'
+                    ? 'heat-stale'
+                    : 'heat-dead';
 
-          <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '12px' }}>
-            You committed to 8 repos this week. 7 went cold.
-          </div>
-
-          {/* Segmented Heat Bar */}
-          <div style={{ display: 'flex', height: '12px', width: '100%', borderRadius: '2px', overflow: 'hidden', marginBottom: '12px' }}>
-            <div style={{ width: '35%', backgroundColor: 'var(--heat-active)' }} />
-            <div style={{ width: '25%', backgroundColor: 'var(--heat-cooling)' }} />
-            <div style={{ width: '20%', backgroundColor: 'var(--heat-stale)' }} />
-            <div style={{ width: '20%', backgroundColor: 'var(--heat-dead)' }} />
-          </div>
-
-          {/* Interactive Group Filters */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            {(['all', 'active', 'cooling', 'stale', 'dead'] as PreviewFilter[]).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setPreviewFilter(f)}
-                style={{
-                  padding: '3px 8px',
-                  borderRadius: 'var(--r)',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  textTransform: 'capitalize',
-                  border: previewFilter === f ? '1px solid var(--ink)' : '1px solid var(--line)',
-                  backgroundColor: previewFilter === f ? 'var(--ink)' : 'var(--surface-2)',
-                  color: previewFilter === f ? 'var(--paper)' : 'var(--ink)',
-                  cursor: 'pointer',
-                }}
-              >
-                {f} {f === 'all' ? '(8)' : f === 'active' ? '(2)' : f === 'cooling' ? '(2)' : f === 'stale' ? '(2)' : '(2)'}
-              </button>
-            ))}
-          </div>
-
-          {/* Filtered Sample Rows */}
-          <div style={{ borderTop: '1px solid var(--line)' }}>
-            {filteredSampleRepos.map((r) => {
-              const heatColor =
-                r.status === 'active'
-                  ? 'var(--heat-active)'
-                  : r.status === 'cooling'
-                  ? 'var(--heat-cooling)'
-                  : r.status === 'stale'
-                  ? 'var(--heat-stale)'
-                  : 'var(--heat-dead)';
-
-              return (
-                <div
-                  key={r.name}
-                  style={{
-                    padding: '10px 0',
-                    borderBottom: '1px solid var(--line)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: heatColor }} />
-                      <span className="mono" style={{ fontSize: '13px', fontWeight: 600 }}>{r.name}</span>
+                return (
+                  <div key={repo.name} className="landing-ledger-row">
+                    <div className="landing-ledger-info">
+                      <div className="landing-repo-name mono">{repo.name}</div>
+                      <div className="landing-repo-meta">{repo.meta}</div>
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginTop: '2px' }}>{r.desc}</div>
-                  </div>
 
-                  {/* Micro Commit Sparkline */}
-                  <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', height: '22px' }}>
-                    {r.activity.map((v, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          width: '3px',
-                          height: `${Math.max(3, v * 4)}px`,
-                          backgroundColor: v > 0 ? heatColor : 'var(--line)',
-                          borderRadius: '1px',
-                        }}
-                      />
-                    ))}
+                    {/* 90-day strip preview */}
+                    <div
+                      className="landing-strip-wrapper"
+                      role="img"
+                      aria-label={`90-day commit strip for ${repo.name}`}
+                    >
+                      <div className="landing-strip-bars">
+                        {repo.activity.map((count, i) => {
+                          const height = count > 0 ? Math.max(4, Math.min(32, count * 7)) : 1;
+                          return (
+                            <div
+                              key={i}
+                              className={`landing-strip-bar ${count > 0 ? `${heatColorClass}-bg` : 'empty-bar'}`}
+                              style={{ height: `${height}px` }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* 3 Pillars of RepoPulse */}
-      <div style={{ marginTop: '64px', paddingTop: '48px', borderTop: '1px solid var(--line)' }}>
-        <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 40px auto' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '8px' }}>
-            Built for developers with too many side-projects.
-          </h2>
-          <p style={{ fontSize: '14px', color: 'var(--ink-2)' }}>
-            A disciplined system designed to turn repository guilt into actionable clarity.
+      {/* 3. "Four states, one rule" */}
+      <section className="landing-section landing-states-section">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <Thermometer size={20} strokeWidth={1.75} aria-hidden="true" className="landing-heading-icon" />
+            <h2 className="landing-section-h2">Four states, one rule</h2>
+          </div>
+          <p className="landing-section-intro">
+            Every repository automatically falls into one of four states based on commit frequency.
+          </p>
+
+          <div className="landing-states-table">
+            <div className="landing-state-row">
+              <div className="landing-state-name-col">
+                <span className="landing-swatch-10 heat-active-bg" />
+                <span className="landing-state-name">Active</span>
+              </div>
+              <div className="landing-state-rule">
+                Committed in the last 7 days
+              </div>
+            </div>
+
+            <div className="landing-state-row">
+              <div className="landing-state-name-col">
+                <span className="landing-swatch-10 heat-cooling-bg" />
+                <span className="landing-state-name">Cooling</span>
+              </div>
+              <div className="landing-state-rule">
+                8 to 14 days without commits
+              </div>
+            </div>
+
+            <div className="landing-state-row">
+              <div className="landing-state-name-col">
+                <span className="landing-swatch-10 heat-stale-bg" />
+                <span className="landing-state-name">Stale</span>
+              </div>
+              <div className="landing-state-rule">
+                15 to 30 days without commits
+              </div>
+            </div>
+
+            <div className="landing-state-row">
+              <div className="landing-state-name-col">
+                <span className="landing-swatch-10 heat-dead-bg" />
+                <span className="landing-state-name">Dead</span>
+              </div>
+              <div className="landing-state-rule">
+                Over 30 days or no commits recorded
+              </div>
+            </div>
+          </div>
+
+          <p className="landing-states-footer-note">
+            Thresholds can be changed in Settings.
           </p>
         </div>
+      </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-          {/* Pillar 1 */}
-          <div style={{ padding: '24px', backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
-            <div style={{ fontSize: '24px', marginBottom: '12px' }}>🌡️</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>Thermodynamic Heat Ramp</h3>
-            <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
-              No arbitrary metrics. Repositories automatically shift between <strong>Active</strong> (&le;7d), <strong>Cooling</strong> (&le;14d), <strong>Stale</strong> (&le;30d), and <strong>Dead</strong> (&gt;30d) based on actual commit frequency.
-            </p>
+      {/* 4. "Decide in seconds" */}
+      <section className="landing-section landing-triage-section">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <Keyboard size={20} strokeWidth={1.75} aria-hidden="true" className="landing-heading-icon" />
+            <h2 className="landing-section-h2">Decide in seconds</h2>
           </div>
 
-          {/* Pillar 2 */}
-          <div style={{ padding: '24px', backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
-            <div style={{ fontSize: '24px', marginBottom: '12px' }}>⌨️</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>60-Second Keyboard Triage</h3>
-            <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
-              Rapidly decide the fate of cooling and stale projects: press <kbd style={{ padding: '2px 5px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '11px', fontFamily: 'var(--mono)' }}>K</kbd> to Keep, <kbd style={{ padding: '2px 5px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '11px', fontFamily: 'var(--mono)' }}>P</kbd> to Pause, or <kbd style={{ padding: '2px 5px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '11px', fontFamily: 'var(--mono)' }}>R</kbd> to Retire.
-            </p>
-          </div>
+          <div className="landing-triage-grid">
+            {/* Left text */}
+            <div className="landing-triage-text">
+              <p className="landing-body-text">
+                When projects cool down, make deliberate decisions instead of letting them linger. Review cooling and stale repositories one by one and press K to keep going, P to pause for a fixed period, or R to retire to the archive.
+              </p>
+              <p className="landing-shortcut-note">
+                Shortcuts K, P, and R work anywhere during triage.
+              </p>
+            </div>
 
-          {/* Pillar 3 */}
-          <div style={{ padding: '24px', backgroundColor: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
-            <div style={{ fontSize: '24px', marginBottom: '12px' }}>🔒</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>Zero-Code Privacy Guarantee</h3>
-            <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
-              We never clone, read, or parse your source code. RepoPulse inspects only commit timestamps and repository names via read-only GitHub API. Full JSON export and 1-click account wipe anytime.
-            </p>
+            {/* Right Static Triage Preview */}
+            <div className="landing-triage-preview">
+              <div className="landing-triage-preview-meta">
+                <span className="landing-preview-label">Triage item 1 of 4</span>
+                <div className="landing-triage-repo mono">metrics-exporter</div>
+                <div className="landing-triage-sub">Cooling, last commit 9 days ago, Go</div>
+              </div>
+
+              {/* Triage 90-day strip preview */}
+              <div className="landing-strip-wrapper triage-strip" role="img" aria-label="90-day commit strip for triage preview">
+                <div className="landing-strip-bars">
+                  {TRIAGE_SAMPLE_ACTIVITY.map((count, i) => {
+                    const height = count > 0 ? Math.max(4, Math.min(32, count * 7)) : 1;
+                    return (
+                      <div
+                        key={i}
+                        className={`landing-strip-bar ${count > 0 ? 'heat-cooling-bg' : 'empty-bar'}`}
+                        style={{ height: `${height}px` }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Triage Actions with Keys */}
+              <div className="landing-triage-buttons">
+                <div className="landing-triage-btn-item">
+                  <button type="button" className="landing-btn-outline" tabIndex={-1}>
+                    Keep going
+                  </button>
+                  <span className="landing-key-hint">K</span>
+                </div>
+                <div className="landing-triage-btn-item">
+                  <button type="button" className="landing-btn-outline" tabIndex={-1}>
+                    Pause
+                  </button>
+                  <span className="landing-key-hint">P</span>
+                </div>
+                <div className="landing-triage-btn-item">
+                  <button type="button" className="landing-btn-outline" tabIndex={-1}>
+                    Retire
+                  </button>
+                  <span className="landing-key-hint">R</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* 5. "What we read and store" */}
+      <section className="landing-section landing-privacy-section">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <ShieldCheck size={20} strokeWidth={1.75} aria-hidden="true" className="landing-heading-icon" />
+            <h2 className="landing-section-h2">What we read and store</h2>
+          </div>
+
+          <div className="landing-columns-grid">
+            {/* Column 1: Reads */}
+            <div className="landing-column-block">
+              <h3 className="landing-column-h3">Reads</h3>
+              <ul className="landing-list">
+                <li className="landing-list-item">
+                  <Check size={16} strokeWidth={1.75} aria-hidden="true" className="landing-list-icon" />
+                  <span>Repository names and descriptions</span>
+                </li>
+                <li className="landing-list-item">
+                  <Check size={16} strokeWidth={1.75} aria-hidden="true" className="landing-list-icon" />
+                  <span>Commit dates and daily commit counts</span>
+                </li>
+                <li className="landing-list-item">
+                  <Check size={16} strokeWidth={1.75} aria-hidden="true" className="landing-list-icon" />
+                  <span>Primary language and visibility status</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 2: Never reads or stores */}
+            <div className="landing-column-block">
+              <h3 className="landing-column-h3">Never reads or stores</h3>
+              <ul className="landing-list">
+                <li className="landing-list-item">
+                  <Minus size={16} strokeWidth={1.75} aria-hidden="true" className="landing-list-icon" />
+                  <span>Your code, diffs, or file contents</span>
+                </li>
+                <li className="landing-list-item">
+                  <Minus size={16} strokeWidth={1.75} aria-hidden="true" className="landing-list-icon" />
+                  <span>Commit messages or author details</span>
+                </li>
+                <li className="landing-list-item">
+                  <Minus size={16} strokeWidth={1.75} aria-hidden="true" className="landing-list-icon" />
+                  <span>Personal access tokens on our servers</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <p className="landing-privacy-footer-line">
+            Export your data or delete your account at any time.
+          </p>
+        </div>
+      </section>
+
+      {/* 6. "Questions" */}
+      <section className="landing-section landing-faq-section">
+        <div className="landing-container">
+          <h2 className="landing-section-h2 landing-faq-title">Questions</h2>
+
+          <div className="landing-faq-list">
+            <div className="landing-faq-item">
+              <h3 className="landing-faq-q">Does it change anything on GitHub?</h3>
+              <p className="landing-faq-a">
+                No. RepoPulse operates with read-only access. It never writes commits, creates branches, opens issues, or alters repository settings.
+              </p>
+            </div>
+
+            <div className="landing-faq-item">
+              <h3 className="landing-faq-q">Where is my access stored?</h3>
+              <p className="landing-faq-a">
+                Your session is stored in secure, encrypted browser cookies. If you use local mode or self-host, your credentials never leave your machine.
+              </p>
+            </div>
+
+            <div className="landing-faq-item">
+              <h3 className="landing-faq-q">Which commits count?</h3>
+              <p className="landing-faq-a">
+                RepoPulse counts all commits authored by you to the default branch across your repositories in the last 90 days.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. Final band using ink background with paper text */}
+      <section className="landing-final-band">
+        <div className="landing-container landing-final-container">
+          <h2 className="landing-final-h2">
+            Find out what you have actually been working on.
+          </h2>
+          <div>
+            <a href="/auth/github/start" className="landing-btn-inverted">
+              Sign in with GitHub
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. Footer */}
+      <footer className="landing-footer">
+        <div className="landing-container landing-footer-inner">
+          <p className="landing-footer-brand">
+            RepoPulse. A quiet repository ledger for developers.
+          </p>
+          <div className="landing-footer-links">
+            <a href="#privacy" className="landing-footer-link">
+              Privacy
+            </a>
+            <a href="#terms" className="landing-footer-link">
+              Terms
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

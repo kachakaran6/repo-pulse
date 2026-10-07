@@ -72,7 +72,7 @@ export const AnalyticsView: React.FC = () => {
             <span style={{ fontSize: '14px', color: 'var(--ink-2)' }}>/ 100</span>
           </div>
           <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginTop: '4px' }}>
-            {data.health_score >= 80 ? '🔥 High momentum' : data.health_score >= 50 ? '⚡ Balanced maintenance' : '❄️ Many cold projects'}
+            {data.health_score >= 80 ? 'High momentum' : data.health_score >= 50 ? 'Balanced maintenance' : 'Many cold projects'}
           </div>
         </div>
 
@@ -229,22 +229,22 @@ export const AnalyticsView: React.FC = () => {
 
             {data.most_active_repo && (
               <div style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ fontSize: '11px', color: 'var(--heat-active)', fontWeight: 600, textTransform: 'uppercase' }}>
-                  🔥 Most Active Project
+                <div style={{ fontSize: '11px', color: 'var(--heat-active)', fontWeight: 600 }}>
+                  Most active project
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'var(--mono)', marginTop: '2px' }}>
                   {data.most_active_repo.name}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
-                  {data.most_active_repo.commits_90d} commits in past 90 days &bull; {data.most_active_repo.language || 'Code'}
+                  {data.most_active_repo.commits_90d} commits in past 90 days, {data.most_active_repo.language || 'Code'}
                 </div>
               </div>
             )}
 
             {data.oldest_dormant_repo && (
               <div>
-                <div style={{ fontSize: '11px', color: 'var(--heat-dead)', fontWeight: 600, textTransform: 'uppercase' }}>
-                  ❄️ Longest Neglected Project
+                <div style={{ fontSize: '11px', color: 'var(--heat-dead)', fontWeight: 600 }}>
+                  Longest neglected project
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'var(--mono)', marginTop: '2px' }}>
                   {data.oldest_dormant_repo.name}

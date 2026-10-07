@@ -323,6 +323,36 @@ export const App: React.FC = () => {
     showToast(res.message || 'Token disconnected');
   };
 
+  if (isLoading) {
+    return (
+      <div className="main-content" style={{ maxWidth: '1040px', margin: '40px auto', padding: '0 24px' }}>
+        <div style={{ width: '100%', height: '36px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', marginBottom: '24px' }} />
+        <SkeletonRow />
+        <SkeletonRow />
+        <SkeletonRow />
+        <SkeletonRow />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        {toastMessage && (
+          <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+        )}
+        {errorMessage && (
+          <ErrorBanner
+            message={errorMessage}
+            actionText="Dismiss"
+            onAction={() => setErrorMessage(null)}
+          />
+        )}
+        <OnboardingView />
+      </>
+    );
+  }
+
   return (
     <Shell
       activeTab={activeTab}
@@ -349,26 +379,7 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Loading State */}
-      {isLoading ? (
-        <div>
-          <div style={{ width: '100%', height: '36px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', marginBottom: '24px' }} />
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
-        </div>
-      ) : !user ? (
-        <OnboardingView
-          onDemoLogin={handleDemoLogin}
-          onTokenLogin={handleTokenLogin}
-          onSignup={handleSignup}
-          onLogin={handlePasswordLogin}
-          isLoading={isLoading}
-        />
-      ) : (
-        <>
-          {activeTab === 'overview' && (
+      {activeTab === 'overview' && (
             <OverviewView
               repos={repos}
               summarySentence={summarySentence}
@@ -410,8 +421,6 @@ export const App: React.FC = () => {
               onDeleteAccount={handleDeleteAccount}
             />
           )}
-        </>
-      )}
 
       {/* Repository Detail Modal */}
       {selectedRepoForDetail && (

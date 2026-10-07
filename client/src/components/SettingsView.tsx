@@ -240,7 +240,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               display: 'block'
             }}
           >
-            {showPatGuide ? 'Hide instructions' : 'How to generate a token? ↗'}
+            {showPatGuide ? 'Hide instructions' : 'How to generate a token?'}
           </button>
           {showPatGuide && (
             <div style={{
@@ -257,9 +257,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: 'var(--heat-active)', fontWeight: 600, textDecoration: 'underline' }}
+                style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'underline' }}
               >
-                GitHub Token Creator ↗
+                GitHub Token Creator
               </a><br />
               2. Select <code style={{ fontFamily: 'var(--mono)' }}>repo</code> (or <code style={{ fontFamily: 'var(--mono)' }}>public_repo</code>) and <code style={{ fontFamily: 'var(--mono)' }}>read:user</code> scopes.<br />
               3. Click <strong>Generate token</strong> and paste below.
