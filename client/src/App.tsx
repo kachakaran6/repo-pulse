@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Repository, UserProfile, UserSettings, InstallationStatus, SyncStatus, SummaryStats, RepoMetadata } from './types.js';
+import type {
+  Repository,
+  UserProfile,
+  UserSettings,
+  InstallationStatus,
+  SyncStatus,
+  SummaryStats,
+  RepoMetadata,
+} from './types.js';
 import * as api from './api.js';
 import { Shell } from './components/Shell.js';
 import { OverviewView } from './components/OverviewView.js';
@@ -12,7 +20,7 @@ import { OnboardingView } from './components/OnboardingView.js';
 import { SkeletonRow, Toast, ErrorBanner } from './components/FeedbackComponents.js';
 
 interface UndoAction {
-  repoId: number;
+  repoId: string | number;
   previousMeta: RepoMetadata;
 }
 
@@ -38,7 +46,7 @@ export const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Undo stack
+  // Undo stack for triage
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
 
   const showToast = (msg: string) => {
@@ -48,7 +56,7 @@ export const App: React.FC = () => {
     }, 4000);
   };
 
-  // Apply theme to document
+  // Apply theme
   useEffect(() => {
     const root = document.documentElement;
     if (settings.theme === 'system') {
@@ -58,7 +66,7 @@ export const App: React.FC = () => {
     }
   }, [settings.theme]);
 
-  // Load user profile and initial repository data
+  // Load user profile and initial repository data via /api/me
   const loadInitialData = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -86,14 +94,15 @@ export const App: React.FC = () => {
             setStats(updated.stats);
           }
         } catch {
-          // ignore cooldown or token absence
+          // ignore rate limits or initial state
         } finally {
           setIsSyncing(false);
         }
       }
     } catch {
-      // User is not signed in or session is unauthenticated
+      // User is unauthenticated
       setUser(null);
+      setRepos([]);
     } finally {
       setIsLoading(false);
     }
@@ -103,16 +112,7 @@ export const App: React.FC = () => {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Handle URL auth_demo parameter
-  useEffect(() => {
-    if (window.location.search.includes('auth_demo=true') && !user && !isLoading) {
-      handleDemoLogin('developer').then(() => {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      });
-    }
-  }, [user, isLoading]);
-
-  // Reload repos when needed
+  // Reload repos
   const refreshRepos = async () => {
     try {
       const reposData = await api.fetchRepos();
@@ -126,11 +126,11 @@ export const App: React.FC = () => {
 
   // Triage Decision
   const handleTriageDecision = async (
-    repoId: number,
+    repoId: string | number,
     decision: 'keep' | 'pause' | 'retire',
     options?: { goal_date?: string | null; paused_until?: string | null }
   ) => {
-    const targetRepo = repos.find((r) => r.id === repoId);
+    const targetRepo = repos.find((r) => String(r.id) === String(repoId));
     if (!targetRepo) return;
 
     setUndoStack((prev) => [
@@ -175,8 +175,8 @@ export const App: React.FC = () => {
   };
 
   // Bring back retired repository from Archive
-  const handleBringBack = async (repoId: number) => {
-    const target = repos.find((r) => r.id === repoId);
+  const handleBringBack = async (repoId: string | number) => {
+    const target = repos.find((r) => String(r.id) === String(repoId));
     try {
       await api.updateRepoMeta(repoId, {
         decision: 'keep',
@@ -190,7 +190,7 @@ export const App: React.FC = () => {
 
   // Save details / metadata modal
   const handleSaveRepoDetails = async (
-    repoId: number,
+    repoId: string | number,
     updates: { label?: string | null; goal_date?: string | null; note?: string | null }
   ) => {
     try {
@@ -268,79 +268,23 @@ export const App: React.FC = () => {
     showToast('Signed out everywhere');
   };
 
-  // Demo Login
-  const handleDemoLogin = async (username: string) => {
+  // Dev Login
+  const handleDevLogin = async () => {
     setIsLoading(true);
     try {
-      await api.loginDemoUser(username);
+      await api.loginDevUser();
       await loadInitialData();
-      showToast(`Signed in as ${username}`);
-    } catch {
-      setErrorMessage('Failed to sign in demo user');
+      showToast('Signed in via developer mode');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Dev login failed');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Personal Access Token Login
-  const handleTokenLogin = async (token: string) => {
-    setIsLoading(true);
-    setIsSyncing(true);
-    try {
-      const res = await api.loginWithToken(token);
-      await loadInitialData();
-      showToast(`Authenticated as ${res.user.login} and repositories synced!`);
-    } finally {
-      setIsSyncing(false);
-      setIsLoading(false);
-    }
-  };
-
-  // Cloud Account Signup
-  const handleSignup = async (username: string, password: string, token?: string) => {
-    setIsLoading(true);
-    setIsSyncing(true);
-    try {
-      const res = await api.signupUser({ username, password, token });
-      await loadInitialData();
-      showToast(`Account created! Welcome, ${res.user.login}`);
-    } finally {
-      setIsSyncing(false);
-      setIsLoading(false);
-    }
-  };
-
-  // Cloud Account Login
-  const handlePasswordLogin = async (username: string, password: string) => {
-    setIsLoading(true);
-    setIsSyncing(true);
-    try {
-      const res = await api.loginUser({ username, password });
-      await loadInitialData();
-      showToast(`Welcome back, ${res.user.login}!`);
-    } finally {
-      setIsSyncing(false);
-      setIsLoading(false);
-    }
-  };
-
-  // Connect Token from Settings
-  const handleConnectToken = async (token: string) => {
-    setIsSyncing(true);
-    try {
-      const res = await api.connectToken(token);
-      await loadInitialData();
-      showToast(res.message || 'Token connected and synced');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Disconnect Token from Settings
-  const handleDisconnectToken = async () => {
-    const res = await api.disconnectToken();
-    await loadInitialData();
-    showToast(res.message || 'Token disconnected');
+  // GitHub Login
+  const handleGithubLogin = () => {
+    api.loginWithGithub();
   };
 
   if (isLoading && !user) {
@@ -355,6 +299,7 @@ export const App: React.FC = () => {
     );
   }
 
+  // Unauthenticated Route Guard
   if (!user) {
     return (
       <>
@@ -362,16 +307,15 @@ export const App: React.FC = () => {
           <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
         )}
         <OnboardingView
-          onTokenLogin={handleTokenLogin}
-          onLogin={handlePasswordLogin}
-          onSignup={handleSignup}
-          onDemoLogin={handleDemoLogin}
+          onGithubLogin={handleGithubLogin}
+          onDevLogin={handleDevLogin}
           isLoading={isLoading}
         />
       </>
     );
   }
 
+  // Authenticated Application Shell
   return (
     <Shell
       activeTab={activeTab}
@@ -384,12 +328,10 @@ export const App: React.FC = () => {
       onSignOut={handleSignOut}
       onSignOutAll={handleSignOutAll}
     >
-      {/* Toast Notice */}
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
       )}
 
-      {/* Error Banner */}
       {errorMessage && (
         <ErrorBanner
           message={errorMessage}
@@ -415,34 +357,32 @@ export const App: React.FC = () => {
         />
       )}
 
-          {activeTab === 'analytics' && (
-            <AnalyticsView />
-          )}
+      {activeTab === 'analytics' && (
+        <AnalyticsView />
+      )}
 
-          {activeTab === 'triage' && (
-            <TriageView
-              repos={repos}
-              onDecision={handleTriageDecision}
-              onUndoLastDecision={handleUndoLastDecision}
-              hasUndoableAction={undoStack.length > 0}
-            />
-          )}
+      {activeTab === 'triage' && (
+        <TriageView
+          repos={repos}
+          onDecision={handleTriageDecision}
+          onUndoLastDecision={handleUndoLastDecision}
+          hasUndoableAction={undoStack.length > 0}
+        />
+      )}
 
-          {activeTab === 'archive' && (
-            <ArchiveView repos={repos} onBringBack={handleBringBack} />
-          )}
+      {activeTab === 'archive' && (
+        <ArchiveView repos={repos} onBringBack={handleBringBack} />
+      )}
 
-          {activeTab === 'settings' && (
-            <SettingsView
-              settings={settings}
-              installation={installation}
-              onUpdateSettings={handleUpdateSettings}
-              onConnectToken={handleConnectToken}
-              onDisconnectToken={handleDisconnectToken}
-              onExportData={handleExportData}
-              onDeleteAccount={handleDeleteAccount}
-            />
-          )}
+      {activeTab === 'settings' && (
+        <SettingsView
+          settings={settings}
+          installation={installation}
+          onUpdateSettings={handleUpdateSettings}
+          onExportData={handleExportData}
+          onDeleteAccount={handleDeleteAccount}
+        />
+      )}
 
       {/* Repository Detail Modal */}
       {selectedRepoForDetail && (
