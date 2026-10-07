@@ -84,11 +84,12 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
 }) => {
   const [tokenInput, setTokenInput] = useState('');
   const [finalTokenInput, setFinalTokenInput] = useState('');
+  const [heroAuthMode, setHeroAuthMode] = useState<'token' | 'cloud'>('token');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showTokenGuide, setShowTokenGuide] = useState(false);
 
-  // Account Modal state
+  // Account Modal / Form state
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'signup'>('login');
   const [accountUsername, setAccountUsername] = useState('');
@@ -142,7 +143,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     }
   };
 
-  // Handle Account Modal Submit
+  // Handle Account Submit (from hero or modal)
   const handleAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAccountError(null);
@@ -169,13 +170,23 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
   };
 
   const focusHeroInput = () => {
-    heroInputRef.current?.focus();
-    heroInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHeroAuthMode('token');
+    setTimeout(() => {
+      heroInputRef.current?.focus();
+      heroInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const switchToCloudMode = (tab: 'login' | 'signup') => {
+    setHeroAuthMode('cloud');
+    setAuthTab(tab);
+    setAccountError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="landing-page">
-      {/* 1. Header (Once, wordmark left text only, token actions right) */}
+      {/* 1. Header (Wordmark left, token & cloud actions right) */}
       <header className="landing-header">
         <div className="landing-container landing-header-inner">
           <a href="/" className="landing-wordmark">
@@ -194,14 +205,18 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             <button
               type="button"
               className="landing-nav-link"
-              onClick={() => {
-                setAuthTab('login');
-                setAccountError(null);
-                setShowAccountModal(true);
-              }}
+              onClick={() => switchToCloudMode('login')}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
             >
-              Account sign in
+              Cloud sign in
+            </button>
+            <button
+              type="button"
+              className="landing-nav-link"
+              onClick={() => switchToCloudMode('signup')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Create account
             </button>
             <button
               type="button"
@@ -227,76 +242,208 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               RepoPulse reads your GitHub commits and sorts every repo into Active, Cooling, Stale or Dead. Then you decide what to keep, pause or retire.
             </p>
 
-            {/* Direct Token Authentication Form */}
-            <form onSubmit={handleHeroTokenSubmit} className="landing-token-form" id="token-form">
-              <div className="landing-token-input-group">
-                <input
-                  ref={heroInputRef}
-                  type="password"
-                  className="clean-input landing-token-input mono"
-                  placeholder="Paste GitHub Personal Access Token (ghp_...)"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  disabled={isSubmitting || isLoading}
-                  autoComplete="off"
-                />
-                <button
-                  type="submit"
-                  className="landing-btn-primary"
-                  disabled={isSubmitting || isLoading}
-                >
-                  {isSubmitting ? 'Syncing...' : 'Connect & Sync'}
-                </button>
-              </div>
-
-              {errorMessage && (
-                <div className="landing-form-error">
-                  {errorMessage}
-                </div>
-              )}
-
-              <div className="landing-token-helpers">
+            {/* Dual Authentication Selector & Form */}
+            <div className="landing-auth-container">
+              {/* Mode Tabs */}
+              <div className="landing-auth-tabs" role="tablist" aria-label="Authentication Method">
                 <button
                   type="button"
-                  className="landing-link-quiet"
-                  onClick={() => setShowTokenGuide(!showTokenGuide)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '13px' }}
+                  className={`landing-auth-tab ${heroAuthMode === 'token' ? 'active' : ''}`}
+                  onClick={() => { setHeroAuthMode('token'); setErrorMessage(null); }}
+                  role="tab"
+                  aria-selected={heroAuthMode === 'token'}
                 >
-                  {showTokenGuide ? 'Hide token guide' : 'How to generate a token in 30 seconds'}
+                  <Key size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <span>Instant token</span>
                 </button>
-
-                <a href="#sample-preview" className="landing-link-quiet" style={{ fontSize: '13px' }}>
-                  See a sample
-                </a>
+                <button
+                  type="button"
+                  className={`landing-auth-tab ${heroAuthMode === 'cloud' ? 'active' : ''}`}
+                  onClick={() => { setHeroAuthMode('cloud'); setAccountError(null); }}
+                  role="tab"
+                  aria-selected={heroAuthMode === 'cloud'}
+                >
+                  <User size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <span>Cloud account</span>
+                </button>
               </div>
 
-              {showTokenGuide && (
-                <div className="landing-guide-box">
-                  <p style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
-                    Generating your GitHub token:
+              {heroAuthMode === 'token' ? (
+                /* Direct Personal Access Token Flow */
+                <form onSubmit={handleHeroTokenSubmit} className="landing-token-form" id="token-form">
+                  <div className="landing-token-input-group">
+                    <input
+                      ref={heroInputRef}
+                      type="password"
+                      className="clean-input landing-token-input mono"
+                      placeholder="Paste GitHub Personal Access Token (ghp_...)"
+                      value={tokenInput}
+                      onChange={(e) => setTokenInput(e.target.value)}
+                      disabled={isSubmitting || isLoading}
+                      autoComplete="off"
+                    />
+                    <button
+                      type="submit"
+                      className="landing-btn-primary"
+                      disabled={isSubmitting || isLoading}
+                    >
+                      {isSubmitting ? 'Syncing...' : 'Connect & Sync'}
+                    </button>
+                  </div>
+
+                  {errorMessage && (
+                    <div className="landing-form-error">
+                      {errorMessage}
+                    </div>
+                  )}
+
+                  <div className="landing-token-helpers">
+                    <button
+                      type="button"
+                      className="landing-link-quiet"
+                      onClick={() => setShowTokenGuide(!showTokenGuide)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '13px' }}
+                    >
+                      {showTokenGuide ? 'Hide token guide' : 'How to generate a token in 30 seconds'}
+                    </button>
+
+                    <a
+                      href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="landing-link-quiet"
+                      style={{ fontSize: '13px' }}
+                    >
+                      Generate token on GitHub
+                    </a>
+                  </div>
+
+                  {showTokenGuide && (
+                    <div className="landing-guide-box">
+                      <p style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
+                        Generating your GitHub token:
+                      </p>
+                      <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--ink-2)' }}>
+                        <li>
+                          Open{' '}
+                          <a
+                            href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'underline' }}
+                          >
+                            GitHub Token Settings
+                          </a>
+                        </li>
+                        <li>Ensure <code>repo</code> and <code>read:user</code> scopes are selected.</li>
+                        <li>Click <strong>Generate token</strong>, copy the token string, and paste above.</li>
+                      </ol>
+                    </div>
+                  )}
+
+                  <p className="landing-hero-note">
+                    Ephemeral session mode: Token remains strictly in your active session and is never stored permanently in any database.
                   </p>
-                  <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--ink-2)' }}>
-                    <li>
-                      Open{' '}
-                      <a
-                        href="https://github.com/settings/tokens/new?description=RepoPulse&scopes=repo,read:user"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'underline' }}
-                      >
-                        GitHub Token Settings
-                      </a>
-                    </li>
-                    <li>Ensure <code>repo</code> and <code>read:user</code> scopes are selected.</li>
-                    <li>Click <strong>Generate token</strong>, copy the token string, and paste above.</li>
-                  </ol>
+                </form>
+              ) : (
+                /* Cloud Account Sign In / Sign Up Card */
+                <div className="landing-cloud-form-card">
+                  <div className="landing-cloud-subtabs">
+                    <button
+                      type="button"
+                      className={`segmented-btn ${authTab === 'login' ? 'active' : ''}`}
+                      onClick={() => { setAuthTab('login'); setAccountError(null); }}
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      type="button"
+                      className={`segmented-btn ${authTab === 'signup' ? 'active' : ''}`}
+                      onClick={() => { setAuthTab('signup'); setAccountError(null); }}
+                    >
+                      Create Account
+                    </button>
+                  </div>
+
+                  {accountError && (
+                    <div className="landing-form-error" style={{ marginBottom: '12px' }}>
+                      {accountError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAccountSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>
+                        Username
+                      </label>
+                      <input
+                        type="text"
+                        className="clean-input"
+                        style={{ width: '100%', height: '42px' }}
+                        placeholder="Username"
+                        value={accountUsername}
+                        onChange={(e) => setAccountUsername(e.target.value)}
+                        required
+                        autoComplete="username"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        className="clean-input"
+                        style={{ width: '100%', height: '42px' }}
+                        placeholder="Password (minimum 6 characters)"
+                        value={accountPassword}
+                        onChange={(e) => setAccountPassword(e.target.value)}
+                        required
+                        autoComplete={authTab === 'login' ? 'current-password' : 'new-password'}
+                      />
+                    </div>
+
+                    {authTab === 'signup' && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}>
+                            GitHub Token (Optional Vault Storage)
+                          </label>
+                          <span style={{ fontSize: '11px', color: 'var(--ink-2)' }}>Encrypted at rest</span>
+                        </div>
+                        <input
+                          type="password"
+                          className="clean-input mono"
+                          style={{ width: '100%', height: '42px' }}
+                          placeholder="Paste ghp_... to auto-sync across devices"
+                          value={accountToken}
+                          onChange={(e) => setAccountToken(e.target.value)}
+                          autoComplete="off"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="landing-btn-primary"
+                      style={{ width: '100%', height: '44px', marginTop: '4px' }}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting
+                        ? 'Please wait...'
+                        : authTab === 'login'
+                        ? 'Sign In to Cloud Account'
+                        : 'Create Cloud Account'}
+                    </button>
+                  </form>
+
+                  <p className="landing-hero-note" style={{ marginTop: '12px' }}>
+                    Cloud vault mode: Passwords are salted & hashed. Tokens are stored encrypted at rest with AES-256-GCM. We never share or sell your data.
+                  </p>
                 </div>
               )}
-            </form>
-
-            <p className="landing-hero-note">
-              Read-only access to the repos you choose. Tokens remain in your secure session and are never shared.
-            </p>
+            </div>
           </div>
 
           {/* Right Column: Static Preview of Overview */}
@@ -601,7 +748,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             Find out what you have actually been working on.
           </h2>
 
-          <form onSubmit={handleFinalTokenSubmit} style={{ display: 'flex', gap: '8px', maxWidth: '480px', width: '100%' }}>
+          <form onSubmit={handleFinalTokenSubmit} style={{ display: 'flex', gap: '8px', maxWidth: '480px', width: '100%', marginBottom: '16px' }}>
             <input
               type="password"
               className="clean-input mono"
@@ -617,6 +764,30 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               Connect & Sync
             </button>
           </form>
+
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <span style={{ color: 'var(--paper)', opacity: 0.8, fontSize: '14px' }}>Prefer permanent sync?</span>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthTab('login');
+                setShowAccountModal(true);
+              }}
+              style={{ background: 'transparent', border: '1px solid var(--paper)', color: 'var(--paper)', padding: '6px 14px', borderRadius: 'var(--r)', fontSize: '13px', cursor: 'pointer' }}
+            >
+              Sign in to Cloud
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthTab('signup');
+                setShowAccountModal(true);
+              }}
+              style={{ background: 'var(--paper)', border: '1px solid var(--paper)', color: 'var(--ink)', padding: '6px 14px', borderRadius: 'var(--r)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Create Account
+            </button>
+          </div>
         </div>
       </section>
 
