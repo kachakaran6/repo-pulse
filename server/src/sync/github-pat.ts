@@ -52,6 +52,7 @@ export async function validateGitHubToken(token: string): Promise<GitHubUserProf
 
 /**
  * Synchronize real repositories using user's Personal Access Token
+ * Paginates through all pages so all repositories (e.g. 184+) are fetched accurately.
  */
 export async function syncReposWithPat(userId: number, token: string): Promise<SyncResult> {
   const syncRun = memoryDb.createSyncRun(userId);
@@ -60,31 +61,54 @@ export async function syncReposWithPat(userId: number, token: string): Promise<S
   logger.info({ userId }, 'Starting live GitHub repository sync with Personal Access Token');
 
   try {
-    // 1. Fetch repositories
-    const reposRes = await fetch(
-      'https://api.github.com/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator',
-      {
-        headers: {
-          'Authorization': `Bearer ${cleanToken}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'RepoPulse-PAT-Client/2.0',
-        },
-      }
-    );
+    // 1. Fetch all repositories across all pages
+    let page = 1;
+    const allGithubRepos: any[] = [];
 
-    if (!reposRes.ok) {
-      throw new Error(`Failed to fetch repositories from GitHub: HTTP ${reposRes.status}`);
+    while (true) {
+      const reposRes = await fetch(
+        `https://api.github.com/user/repos?per_page=100&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`,
+        {
+          headers: {
+            'Authorization': `Bearer ${cleanToken}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'RepoPulse-PAT-Client/2.0',
+          },
+        }
+      );
+
+      if (!reposRes.ok) {
+        if (page === 1) {
+          throw new Error(`Failed to fetch repositories from GitHub: HTTP ${reposRes.status}`);
+        }
+        break;
+      }
+
+      const pageRepos = (await reposRes.json()) as any[];
+      if (!Array.isArray(pageRepos) || pageRepos.length === 0) {
+        break;
+      }
+
+      allGithubRepos.push(...pageRepos);
+      logger.info({ userId, page, pageCount: pageRepos.length, totalSoFar: allGithubRepos.length }, 'Fetched repository page from GitHub');
+
+      if (pageRepos.length < 100) {
+        break;
+      }
+
+      page++;
+      if (page > 30) {
+        // Safety cap (3,000 repositories)
+        break;
+      }
     }
 
-    const githubRepos = (await reposRes.json()) as any[];
     const now = new Date();
     const since90Days = new Date(now.getTime() - 90 * 864e5).toISOString();
-    let reposCount = 0;
+    const repoRecords: { id: number; fullName: string; defaultBranch: string }[] = [];
 
-    // 2. Process up to 50 active/pushed repositories
-    const targetRepos = githubRepos.slice(0, 50);
-
-    for (const ghRepo of targetRepos) {
+    // 2. Upsert every repository in database
+    for (const ghRepo of allGithubRepos) {
       const isPrivate = ghRepo.private === true;
       const defaultBranch = ghRepo.default_branch || 'main';
       const lastPushedAt = ghRepo.pushed_at ? new Date(ghRepo.pushed_at) : null;
@@ -101,6 +125,8 @@ export async function syncReposWithPat(userId: number, token: string): Promise<S
         archived_on_github: ghRepo.archived === true,
       });
 
+      repoRecords.push({ id: repo.id, fullName: ghRepo.full_name, defaultBranch });
+
       // Default metadata
       const existingMeta = memoryDb.repoMeta.get(repo.id);
       if (!existingMeta) {
@@ -111,43 +137,51 @@ export async function syncReposWithPat(userId: number, token: string): Promise<S
           goal_date: null,
         });
       }
+    }
 
-      // Fetch commit history for 90-day sparkline (best-effort)
-      try {
-        const commitsRes = await fetch(
-          `https://api.github.com/repos/${ghRepo.full_name}/commits?since=${since90Days}&per_page=100`,
-          {
-            headers: {
-              'Authorization': `Bearer ${cleanToken}`,
-              'Accept': 'application/vnd.github.v3+json',
-              'User-Agent': 'RepoPulse-PAT-Client/2.0',
-            },
-          }
-        );
+    // 3. Fetch 90-day commit history concurrently in batches of 10
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < repoRecords.length; i += BATCH_SIZE) {
+      const batch = repoRecords.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (r) => {
+          try {
+            const commitsRes = await fetch(
+              `https://api.github.com/repos/${r.fullName}/commits?since=${since90Days}&per_page=100`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${cleanToken}`,
+                  'Accept': 'application/vnd.github.v3+json',
+                  'User-Agent': 'RepoPulse-PAT-Client/2.0',
+                },
+              }
+            );
 
-        if (commitsRes.ok) {
-          const commits = (await commitsRes.json()) as any[];
-          if (Array.isArray(commits)) {
-            const dailyCounts: Record<string, number> = {};
-            for (const c of commits) {
-              const dateStr = c?.commit?.author?.date || c?.commit?.committer?.date;
-              if (dateStr) {
-                const day = dateStr.split('T')[0];
-                dailyCounts[day] = (dailyCounts[day] || 0) + 1;
+            if (commitsRes.ok) {
+              const commits = (await commitsRes.json()) as any[];
+              if (Array.isArray(commits)) {
+                const dailyCounts: Record<string, number> = {};
+                for (const c of commits) {
+                  const dateStr = c?.commit?.author?.date || c?.commit?.committer?.date;
+                  if (dateStr) {
+                    const day = dateStr.split('T')[0];
+                    dailyCounts[day] = (dailyCounts[day] || 0) + 1;
+                  }
+                }
+
+                for (const [day, count] of Object.entries(dailyCounts)) {
+                  memoryDb.upsertActivity(r.id, userId, day, count);
+                }
               }
             }
-
-            for (const [day, count] of Object.entries(dailyCounts)) {
-              memoryDb.upsertActivity(repo.id, userId, day, count);
-            }
+          } catch (err: any) {
+            logger.warn({ repo: r.fullName, error: err.message }, 'Failed to fetch commit history for repo');
           }
-        }
-      } catch (err: any) {
-        logger.warn({ repo: ghRepo.full_name, error: err.message }, 'Failed to fetch commit history for repo');
-      }
-
-      reposCount++;
+        })
+      );
     }
+
+    const reposCount = repoRecords.length;
 
     memoryDb.updateSyncRun(syncRun.id, {
       finished_at: new Date(),
