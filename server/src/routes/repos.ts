@@ -112,10 +112,165 @@ reposRouter.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/repos/analytics
+ * Returns comprehensive repository portfolio statistics, language distribution, velocity, and health scores
+ */
+reposRouter.get('/analytics', async (req, res) => {
+  const userId = req.user!.id;
+  const userSettings = memoryDb.getSettings(userId);
+  const thresholds = {
+    active: userSettings.active_days,
+    cooling: userSettings.cooling_days,
+    stale: userSettings.stale_days,
+  };
+
+  const rawRepos = memoryDb.getUserRepos(userId);
+  const now = Date.now();
+  const dayMs = 864e5;
+
+  let totalCommits7d = 0;
+  let totalCommits30d = 0;
+  let totalCommits90d = 0;
+  let privateCount = 0;
+  let publicCount = 0;
+  let archivedCount = 0;
+
+  const languagesMap: Record<string, number> = {};
+  const globalDailyActivity: Record<string, number> = {};
+
+  // Initialize 90-day activity map
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(now - i * dayMs).toISOString().split('T')[0];
+    globalDailyActivity[d] = 0;
+  }
+
+  let mostActiveRepo: any = null;
+  let maxRepoCommits90d = -1;
+
+  let oldestDormantRepo: any = null;
+  let maxDormantDays = -1;
+
+  let activeCount = 0;
+  let coolingCount = 0;
+  let staleCount = 0;
+  let deadCount = 0;
+  let retiredCount = 0;
+
+  const cutoff7d = new Date(now - 7 * dayMs).toISOString().split('T')[0];
+  const cutoff30d = new Date(now - 30 * dayMs).toISOString().split('T')[0];
+  const cutoff90d = new Date(now - 90 * dayMs).toISOString().split('T')[0];
+
+  for (const r of rawRepos) {
+    if (r.is_private) privateCount++;
+    else publicCount++;
+
+    if (r.archived_on_github) archivedCount++;
+
+    const status = statusOf(r.last_commit_at, now, thresholds);
+    const explanation = explainStatus(r.last_commit_at, now, thresholds);
+
+    const isRetired = r.meta?.decision === 'retire';
+    if (isRetired) {
+      retiredCount++;
+    } else {
+      if (status === 'active') activeCount++;
+      else if (status === 'cooling') coolingCount++;
+      else if (status === 'stale') staleCount++;
+      else deadCount++;
+    }
+
+    // Language
+    const lang = r.language || 'Other';
+    languagesMap[lang] = (languagesMap[lang] || 0) + 1;
+
+    // Activity aggregation
+    let repo90dCommits = 0;
+    for (const act of r.activity || []) {
+      if (act.day >= cutoff90d) {
+        totalCommits90d += act.commits;
+        repo90dCommits += act.commits;
+        if (globalDailyActivity[act.day] !== undefined) {
+          globalDailyActivity[act.day] += act.commits;
+        }
+      }
+      if (act.day >= cutoff30d) {
+        totalCommits30d += act.commits;
+      }
+      if (act.day >= cutoff7d) {
+        totalCommits7d += act.commits;
+      }
+    }
+
+    if (repo90dCommits > maxRepoCommits90d) {
+      maxRepoCommits90d = repo90dCommits;
+      mostActiveRepo = {
+        id: r.id,
+        name: r.full_name,
+        commits_90d: repo90dCommits,
+        language: r.language,
+      };
+    }
+
+    if (explanation.days !== null && explanation.days > maxDormantDays) {
+      maxDormantDays = explanation.days;
+      oldestDormantRepo = {
+        id: r.id,
+        name: r.full_name,
+        days_inactive: explanation.days,
+        last_commit_at: r.last_commit_at ? new Date(r.last_commit_at).toISOString() : null,
+      };
+    }
+  }
+
+  // Language Breakdown sorted
+  const totalWithLang = rawRepos.length || 1;
+  const languages = Object.entries(languagesMap)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percentage: Math.round((count / totalWithLang) * 100),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // Health Score (0 - 100)
+  const warmRatio = rawRepos.length > 0 ? (activeCount + coolingCount * 0.75) / rawRepos.length : 1;
+  const commitHealthBonus = Math.min(25, totalCommits7d * 2);
+  const healthScore = Math.min(100, Math.round(warmRatio * 75 + commitHealthBonus));
+
+  const dailyTrend = Object.entries(globalDailyActivity).map(([day, commits]) => ({ day, commits }));
+
+  res.json({
+    total_repos: rawRepos.length,
+    public_count: publicCount,
+    private_count: privateCount,
+    archived_count: archivedCount,
+    health_score: healthScore,
+    commits: {
+      past_7_days: totalCommits7d,
+      past_30_days: totalCommits30d,
+      past_90_days: totalCommits90d,
+      weekly_average: Math.round(totalCommits90d / 12),
+    },
+    heat_distribution: {
+      active: activeCount,
+      cooling: coolingCount,
+      stale: staleCount,
+      dead: deadCount,
+      retired: retiredCount,
+    },
+    languages,
+    most_active_repo: mostActiveRepo,
+    oldest_dormant_repo: oldestDormantRepo,
+    daily_trend: dailyTrend,
+  });
+});
+
+/**
  * PATCH /api/repos/:id/meta
  * Updates custom label, goal date, note, or triage decision
  */
 reposRouter.patch('/:id/meta', async (req, res) => {
+
   const userId = req.user!.id;
   const repoId = Number(req.params.id);
 

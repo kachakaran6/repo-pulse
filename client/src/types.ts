@@ -81,3 +81,42 @@ export interface SummaryStats {
   committedReposThisWeek: number;
   wentColdCount: number;
 }
+
+export interface AnalyticsData {
+  total_repos: number;
+  public_count: number;
+  private_count: number;
+  archived_count: number;
+  health_score: number;
+  commits: {
+    past_7_days: number;
+    past_30_days: number;
+    past_90_days: number;
+    weekly_average: number;
+  };
+  heat_distribution: {
+    active: number;
+    cooling: number;
+    stale: number;
+    dead: number;
+    retired: number;
+  };
+  languages: Array<{
+    name: string;
+    count: number;
+    percentage: number;
+  }>;
+  most_active_repo: {
+    id: number;
+    name: string;
+    commits_90d: number;
+    language: string | null;
+  } | null;
+  oldest_dormant_repo: {
+    id: number;
+    name: string;
+    days_inactive: number;
+    last_commit_at: string | null;
+  } | null;
+  daily_trend: Array<{ day: string; commits: number }>;
+}

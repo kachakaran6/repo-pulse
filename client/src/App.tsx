@@ -3,6 +3,7 @@ import type { Repository, UserProfile, UserSettings, InstallationStatus, SyncSta
 import * as api from './api.js';
 import { Shell } from './components/Shell.js';
 import { OverviewView } from './components/OverviewView.js';
+import { AnalyticsView } from './components/AnalyticsView.js';
 import { TriageView } from './components/TriageView.js';
 import { ArchiveView } from './components/ArchiveView.js';
 import { SettingsView } from './components/SettingsView.js';
@@ -29,7 +30,7 @@ export const App: React.FC = () => {
   const [summarySentence, setSummarySentence] = useState<string>('');
   const [stats, setStats] = useState<SummaryStats | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'triage' | 'archive' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'triage' | 'archive' | 'settings'>('overview');
   const [selectedRepoForDetail, setSelectedRepoForDetail] = useState<Repository | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -347,6 +348,10 @@ export const App: React.FC = () => {
                 stale: settings.stale_days,
               }}
             />
+          )}
+
+          {activeTab === 'analytics' && (
+            <AnalyticsView />
           )}
 
           {activeTab === 'triage' && (

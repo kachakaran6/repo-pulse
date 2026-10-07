@@ -1,4 +1,4 @@
-import type { Repository, UserProfile, UserSettings, InstallationStatus, SyncStatus, SummaryStats, RepoMetadata } from './types.js';
+import type { Repository, UserProfile, UserSettings, InstallationStatus, SyncStatus, SummaryStats, RepoMetadata, AnalyticsData } from './types.js';
 
 const API_BASE = '/api';
 
@@ -26,6 +26,17 @@ export async function fetchRepos(): Promise<{ repos: Repository[]; summary: stri
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch repositories: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchAnalytics(): Promise<AnalyticsData> {
+  const res = await fetch(`${API_BASE}/repos/analytics`, {
+    headers: defaultHeaders,
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch analytics: ${res.status}`);
   }
   return res.json();
 }

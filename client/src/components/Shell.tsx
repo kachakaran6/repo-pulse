@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import type { UserProfile, SummaryStats, SyncStatus } from '../types.js';
 
 interface ShellProps {
-  activeTab: 'overview' | 'triage' | 'archive' | 'settings';
-  onSelectTab: (tab: 'overview' | 'triage' | 'archive' | 'settings') => void;
+  activeTab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings';
+  onSelectTab: (tab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings') => void;
   user: UserProfile | null;
   stats: SummaryStats | null;
   lastSync: SyncStatus | null;
@@ -69,6 +69,13 @@ export const Shell: React.FC<ShellProps> = ({
                   onClick={() => onSelectTab('overview')}
                 >
                   Overview
+                </button>
+                <button
+                  type="button"
+                  className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
+                  onClick={() => onSelectTab('analytics')}
+                >
+                  Analytics
                 </button>
                 <button
                   type="button"
