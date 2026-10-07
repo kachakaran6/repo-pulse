@@ -123,5 +123,44 @@ describe('Demo Mode & Route Quality Gates', () => {
     expect(delRes.body.ok).toBe(true);
     expect(delRes.body.message).toContain('disconnected');
   });
+
+  it('handles cloud account signup and subsequent login', async () => {
+    // 1. Sign up
+    const signupRes = await request(app)
+      .post('/auth/signup')
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ username: 'vault-user', password: 'securePassword123' });
+
+    expect(signupRes.status).toBe(200);
+    expect(signupRes.body.ok).toBe(true);
+    expect(signupRes.body.user.login).toBe('vault-user');
+
+    // 2. Reject duplicate signup
+    const dupRes = await request(app)
+      .post('/auth/signup')
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ username: 'vault-user', password: 'anotherPassword123' });
+
+    expect(dupRes.status).toBe(400);
+
+    // 3. Login with correct password
+    const loginRes = await request(app)
+      .post('/auth/login')
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ username: 'vault-user', password: 'securePassword123' });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.ok).toBe(true);
+    expect(loginRes.body.user.login).toBe('vault-user');
+
+    // 4. Reject invalid password
+    const badLoginRes = await request(app)
+      .post('/auth/login')
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ username: 'vault-user', password: 'wrongPassword' });
+
+    expect(badLoginRes.status).toBe(401);
+  });
 });
+
 

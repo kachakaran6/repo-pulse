@@ -17,6 +17,7 @@ import { requireAuth, authRateLimiter } from '../auth/middleware.js';
 import { memoryDb } from '../db/index.js';
 import { runUserSync } from '../sync/engine.js';
 import { validateGitHubToken, syncReposWithPat, userTokens } from '../sync/github-pat.js';
+import { hashPassword, verifyPassword } from '../auth/password.js';
 import { logger } from '../utils/logger.js';
 
 export const authRouter = Router();
@@ -171,6 +172,117 @@ authRouter.post('/token-login', async (req, res) => {
     res.status(401).json({ error: 'Authentication Failed', message: err.message || 'Invalid GitHub token' });
   }
 });
+
+/**
+ * Register a new Cloud Sync Account (with optional token vault storage)
+ */
+authRouter.post('/signup', async (req, res) => {
+  const schema = z.object({
+    username: z.string().min(3).max(39).regex(/^[a-zA-Z0-9_-]+$/, 'Username must be alphanumeric, hyphen or underscore'),
+    password: z.string().min(6, 'Password must be at least 6 characters'),
+    token: z.string().optional(),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message || 'Invalid input.' });
+    return;
+  }
+
+  const { username, password, token } = parsed.data;
+
+  // Check if username already exists
+  const existing = memoryDb.findUserByLogin(username);
+  if (existing) {
+    res.status(400).json({ error: 'User Exists', message: 'Username is already registered. Please sign in.' });
+    return;
+  }
+
+  let ghUser: any = null;
+  const cleanToken = token?.trim() || null;
+  if (cleanToken) {
+    try {
+      ghUser = await validateGitHubToken(cleanToken);
+    } catch (err: any) {
+      res.status(400).json({ error: 'Token Error', message: `Invalid GitHub token: ${err.message}` });
+      return;
+    }
+  }
+
+  const passwordHash = hashPassword(password);
+  const newUser = memoryDb.createUser({
+    github_user_id: ghUser?.id || undefined,
+    login: username,
+    name: ghUser?.name || username,
+    avatar_url: ghUser?.avatar_url || `https://avatars.githubusercontent.com/u/${Math.floor(Math.random() * 100000)}?v=4`,
+    password_hash: passwordHash,
+    saved_token: cleanToken,
+  });
+
+  if (cleanToken) {
+    userTokens.set(newUser.id, cleanToken);
+    // Trigger sync
+    syncReposWithPat(newUser.id, cleanToken).catch((e) => logger.error({ err: e.message }, 'Background sync error'));
+  } else {
+    runUserSync(newUser.id).catch((e) => logger.error({ err: e.message }, 'Demo sync error'));
+  }
+
+  await createSession(newUser.id, req, res);
+  memoryDb.logAudit(newUser.id, 'user_signed_up', { with_token: Boolean(cleanToken) });
+
+  res.json({
+    ok: true,
+    user: {
+      id: newUser.id,
+      login: newUser.login,
+      name: newUser.name,
+      avatar_url: newUser.avatar_url,
+    },
+  });
+});
+
+/**
+ * Log into Cloud Sync Account
+ */
+authRouter.post('/login', async (req, res) => {
+  const schema = z.object({
+    username: z.string().min(1, 'Username is required'),
+    password: z.string().min(1, 'Password is required'),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation Error', message: 'Username and password are required.' });
+    return;
+  }
+
+  const { username, password } = parsed.data;
+  const user = memoryDb.findUserByLogin(username);
+
+  if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
+    res.status(401).json({ error: 'Authentication Failed', message: 'Invalid username or password.' });
+    return;
+  }
+
+  // If user has saved token, restore it in memory
+  if (user.saved_token) {
+    userTokens.set(user.id, user.saved_token);
+  }
+
+  await createSession(user.id, req, res);
+  memoryDb.logAudit(user.id, 'user_logged_in', { method: 'password' });
+
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      login: user.login,
+      name: user.name,
+      avatar_url: user.avatar_url,
+    },
+  });
+});
+
 
 
 /**

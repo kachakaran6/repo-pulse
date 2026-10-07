@@ -115,6 +115,16 @@ class MemoryTenantStore {
     return u && !u.deleted_at ? { ...u } : null;
   }
 
+  findUserByLogin(login: string) {
+    const clean = login.trim().toLowerCase();
+    for (const u of this.users.values()) {
+      if (u.login.toLowerCase() === clean && !u.deleted_at) {
+        return { ...u };
+      }
+    }
+    return null;
+  }
+
   findUserByGithubId(githubUserId: number) {
     for (const u of this.users.values()) {
       if (u.github_user_id === githubUserId && !u.deleted_at) {
@@ -124,14 +134,17 @@ class MemoryTenantStore {
     return null;
   }
 
-  createUser(user: { github_user_id: number; login: string; name?: string; avatar_url?: string }) {
+  createUser(user: { github_user_id?: number; login: string; name?: string; avatar_url?: string; password_hash?: string; saved_token?: string }) {
     const id = ++this.nextId;
+    const githubId = user.github_user_id || id;
     const record = {
       id,
-      github_user_id: user.github_user_id,
+      github_user_id: githubId,
       login: user.login,
       name: user.name || user.login,
-      avatar_url: user.avatar_url || `https://avatars.githubusercontent.com/u/${user.github_user_id}`,
+      avatar_url: user.avatar_url || `https://avatars.githubusercontent.com/u/${githubId}?v=4`,
+      password_hash: user.password_hash || null,
+      saved_token: user.saved_token || null,
       created_at: new Date(),
       deleted_at: null,
     };
@@ -148,6 +161,15 @@ class MemoryTenantStore {
     });
 
     return { ...record };
+  }
+
+  updateUser(id: number, updates: Partial<{ name: string; avatar_url: string; password_hash: string; saved_token: string | null }>) {
+    const u = this.users.get(id);
+    if (u) {
+      Object.assign(u, updates);
+      this.users.set(id, u);
+    }
+    return u ? { ...u } : null;
   }
 
   createSession(session: { id_hash: string; user_id: number; expires_at: Date; ip_hash?: string; ua?: string }) {

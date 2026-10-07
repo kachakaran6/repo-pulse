@@ -96,6 +96,34 @@ export async function loginDemoUser(username = 'demo-developer'): Promise<{ ok: 
   return res.json();
 }
 
+export async function signupUser(params: { username: string; password: string; token?: string }): Promise<{ ok: boolean; user: UserProfile }> {
+  const res = await fetch(`/auth/signup`, {
+    method: 'POST',
+    headers: defaultHeaders,
+    credentials: 'include',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Signup failed');
+  }
+  return res.json();
+}
+
+export async function loginUser(params: { username: string; password: string }): Promise<{ ok: boolean; user: UserProfile }> {
+  const res = await fetch(`/auth/login`, {
+    method: 'POST',
+    headers: defaultHeaders,
+    credentials: 'include',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Login failed');
+  }
+  return res.json();
+}
+
 export async function loginWithToken(token: string): Promise<{ ok: boolean; user: UserProfile }> {
   const res = await fetch(`/auth/token-login`, {
     method: 'POST',
@@ -109,6 +137,7 @@ export async function loginWithToken(token: string): Promise<{ ok: boolean; user
   }
   return res.json();
 }
+
 
 export async function connectToken(token: string): Promise<{ ok: boolean; message: string; repos_read?: number }> {
   const res = await fetch(`${API_BASE}/token`, {
