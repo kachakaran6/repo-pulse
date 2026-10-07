@@ -1,6 +1,17 @@
--- RepoPulse v2 SaaS Postgres Schema with Row-Level Security (RLS)
+-- =====================================================================
+-- RepoPulse v2 SaaS PostgreSQL Schema & Row-Level Security (RLS)
+-- =====================================================================
 
--- Users table
+-- Create tenant application role if not exists
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'repopulse_app') THEN
+    CREATE ROLE repopulse_app;
+  END IF;
+END
+$$;
+
+-- 1. Users Table
 CREATE TABLE IF NOT EXISTS users (
   id              BIGSERIAL PRIMARY KEY,
   github_user_id  BIGINT UNIQUE NOT NULL,
@@ -11,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
   deleted_at      TIMESTAMPTZ
 );
 
--- Sessions table (stores SHA-256 hash of random session token)
+-- 2. Sessions Table (Stores SHA-256 hash of random session token)
 CREATE TABLE IF NOT EXISTS sessions (
   id_hash         TEXT PRIMARY KEY,
   user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -22,7 +33,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   ua              TEXT
 );
 
--- GitHub App Installations
+-- 3. GitHub App Installations Table
 CREATE TABLE IF NOT EXISTS installations (
   id                      BIGSERIAL PRIMARY KEY,
   user_id                 BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -32,7 +43,7 @@ CREATE TABLE IF NOT EXISTS installations (
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Repositories
+-- 4. Repositories Table
 CREATE TABLE IF NOT EXISTS repos (
   id                  BIGSERIAL PRIMARY KEY,
   user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -44,10 +55,11 @@ CREATE TABLE IF NOT EXISTS repos (
   last_commit_at      TIMESTAMPTZ,
   language            TEXT,
   archived_on_github  BOOLEAN NOT NULL DEFAULT false,
-  synced_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+  synced_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT repos_user_github_repo_unique UNIQUE (user_id, github_repo_id)
 );
 
--- Repo Daily Activity (PK repo_id, day)
+-- 5. Repository Daily Activity Table (Composite PK: repo_id, day)
 CREATE TABLE IF NOT EXISTS repo_activity (
   repo_id             BIGINT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
   user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -56,7 +68,7 @@ CREATE TABLE IF NOT EXISTS repo_activity (
   PRIMARY KEY (repo_id, day)
 );
 
--- Repo Metadata (Custom labels, triage decisions, goal dates, notes)
+-- 6. Repository Metadata Table (Custom labels, notes, triage decisions, goal dates)
 CREATE TABLE IF NOT EXISTS repo_meta (
   repo_id             BIGINT PRIMARY KEY REFERENCES repos(id) ON DELETE CASCADE,
   user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -68,7 +80,7 @@ CREATE TABLE IF NOT EXISTS repo_meta (
   decided_at          TIMESTAMPTZ
 );
 
--- User Settings
+-- 7. User Settings Table
 CREATE TABLE IF NOT EXISTS settings (
   user_id             BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   active_days         INTEGER NOT NULL DEFAULT 7,
@@ -78,7 +90,7 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Sync Runs Tracking
+-- 8. Sync Runs Tracking Table
 CREATE TABLE IF NOT EXISTS sync_runs (
   id                  BIGSERIAL PRIMARY KEY,
   user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -89,7 +101,7 @@ CREATE TABLE IF NOT EXISTS sync_runs (
   error               TEXT
 );
 
--- Audit Log (Tenant-isolated compliance and security event trail)
+-- 9. Tenant Audit Log Table
 CREATE TABLE IF NOT EXISTS audit_log (
   id                  BIGSERIAL PRIMARY KEY,
   user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -98,9 +110,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Indexes for optimal performance
+-- =====================================================================
+-- Indexes
+-- =====================================================================
+CREATE INDEX IF NOT EXISTS idx_users_github_user_id ON users(github_user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_installations_user_id ON installations(user_id);
 CREATE INDEX IF NOT EXISTS idx_repos_user_id ON repos(user_id);
 CREATE INDEX IF NOT EXISTS idx_repos_last_commit ON repos(user_id, last_commit_at DESC);
 CREATE INDEX IF NOT EXISTS idx_repo_activity_repo ON repo_activity(repo_id);
@@ -109,56 +125,66 @@ CREATE INDEX IF NOT EXISTS idx_repo_meta_user ON repo_meta(user_id);
 CREATE INDEX IF NOT EXISTS idx_sync_runs_user ON sync_runs(user_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id, created_at DESC);
 
--- Enable Row-Level Security (RLS) on all tenant tables
+-- =====================================================================
+-- Grant Permissions to Restricted Tenant Application Role
+-- =====================================================================
+GRANT ALL ON ALL TABLES IN SCHEMA public TO repopulse_app;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO repopulse_app;
+GRANT ALL ON SCHEMA public TO repopulse_app;
+
+-- =====================================================================
+-- Row-Level Security (RLS) with FORCE for Tenant Isolation
+-- =====================================================================
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE installations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE installations FORCE ROW LEVEL SECURITY;
 ALTER TABLE repos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repos FORCE ROW LEVEL SECURITY;
 ALTER TABLE repo_activity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repo_activity FORCE ROW LEVEL SECURITY;
 ALTER TABLE repo_meta ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repo_meta FORCE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings FORCE ROW LEVEL SECURITY;
 ALTER TABLE sync_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sync_runs FORCE ROW LEVEL SECURITY;
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log FORCE ROW LEVEL SECURITY;
 
 -- Drop existing policies if rerun
 DO $$
 BEGIN
-  DROP POLICY IF EXISTS users_isolation ON users;
-  DROP POLICY IF EXISTS sessions_isolation ON sessions;
-  DROP POLICY IF EXISTS installations_isolation ON installations;
-  DROP POLICY IF EXISTS repos_isolation ON repos;
-  DROP POLICY IF EXISTS repo_activity_isolation ON repo_activity;
-  DROP POLICY IF EXISTS repo_meta_isolation ON repo_meta;
-  DROP POLICY IF EXISTS settings_isolation ON settings;
-  DROP POLICY IF EXISTS sync_runs_isolation ON sync_runs;
-  DROP POLICY IF EXISTS audit_log_isolation ON audit_log;
+  DROP POLICY IF EXISTS users_tenant_isolation ON users;
+  DROP POLICY IF EXISTS sessions_tenant_isolation ON sessions;
+  DROP POLICY IF EXISTS installations_tenant_isolation ON installations;
+  DROP POLICY IF EXISTS repos_tenant_isolation ON repos;
+  DROP POLICY IF EXISTS repo_activity_tenant_isolation ON repo_activity;
+  DROP POLICY IF EXISTS repo_meta_tenant_isolation ON repo_meta;
+  DROP POLICY IF EXISTS settings_tenant_isolation ON settings;
+  DROP POLICY IF EXISTS sync_runs_tenant_isolation ON sync_runs;
+  DROP POLICY IF EXISTS audit_log_tenant_isolation ON audit_log;
 END
 $$;
 
--- Create RLS Policies using app.user_id session variable
-CREATE POLICY users_isolation ON users FOR ALL
-  USING (id = NULLIF(current_setting('app.user_id', true), '')::bigint);
-
-CREATE POLICY sessions_isolation ON sessions FOR ALL
+-- Create Strict Tenant Isolation Policies (USING app.user_id)
+CREATE POLICY installations_tenant_isolation ON installations FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
 
-CREATE POLICY installations_isolation ON installations FOR ALL
+CREATE POLICY repos_tenant_isolation ON repos FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
 
-CREATE POLICY repos_isolation ON repos FOR ALL
+CREATE POLICY repo_activity_tenant_isolation ON repo_activity FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
 
-CREATE POLICY repo_activity_isolation ON repo_activity FOR ALL
+CREATE POLICY repo_meta_tenant_isolation ON repo_meta FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
 
-CREATE POLICY repo_meta_isolation ON repo_meta FOR ALL
+CREATE POLICY settings_tenant_isolation ON settings FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
 
-CREATE POLICY settings_isolation ON settings FOR ALL
+CREATE POLICY sync_runs_tenant_isolation ON sync_runs FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
 
-CREATE POLICY sync_runs_isolation ON sync_runs FOR ALL
-  USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
-
-CREATE POLICY audit_log_isolation ON audit_log FOR ALL
+CREATE POLICY audit_log_tenant_isolation ON audit_log FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
