@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { env } from '../config/env.js';
 import {
-  generateOAuthState,
-  verifyOAuthState,
+  setOAuthStateCookie,
+  verifyAndClearOAuthState,
   exchangeCodeForUser,
   findOrCreateUser,
 } from '../auth/github.js';
@@ -11,13 +10,10 @@ import {
   createSession,
   destroySession,
   destroyAllUserSessions,
-  COOKIE_NAME,
 } from '../auth/session.js';
 import { requireAuth, authRateLimiter } from '../auth/middleware.js';
-import { memoryDb } from '../db/index.js';
+import { db } from '../db/index.js';
 import { runUserSync } from '../sync/engine.js';
-import { validateGitHubToken, syncReposWithPat, userTokens } from '../sync/github-pat.js';
-import { hashPassword, verifyPassword } from '../auth/password.js';
 import { logger } from '../utils/logger.js';
 
 export const authRouter = Router();
@@ -26,41 +22,43 @@ export const authRouter = Router();
 authRouter.use(authRateLimiter);
 
 /**
- * Initiate GitHub OAuth authorization flow
+ * GET /auth/github/start
+ * Initiates GitHub App authorization flow with state cookie
  */
 authRouter.get('/github/start', (req, res) => {
-  const state = generateOAuthState();
-
   if (!env.GITHUB_CLIENT_ID) {
-    // In dev / demo mode without GitHub credentials, offer instant redirect
-    res.redirect('/?auth_demo=true');
+    logger.warn('GitHub App Client ID not configured.');
+    res.redirect(`${env.APP_URL}/?error=github_not_configured`);
     return;
   }
+
+  const state = setOAuthStateCookie(req, res);
+  const redirectUri = `${env.API_URL}/auth/github/callback`;
 
   const githubAuthUrl = new URL('https://github.com/login/oauth/authorize');
   githubAuthUrl.searchParams.set('client_id', env.GITHUB_CLIENT_ID);
   githubAuthUrl.searchParams.set('state', state);
-  githubAuthUrl.searchParams.set('redirect_uri', `${req.protocol}://${req.get('host')}/auth/github/callback`);
-  githubAuthUrl.searchParams.set('scope', 'read:user');
+  githubAuthUrl.searchParams.set('redirect_uri', redirectUri);
 
   res.redirect(githubAuthUrl.toString());
 });
 
 /**
- * Handle GitHub OAuth callback
+ * GET /auth/github/callback
+ * Handles GitHub OAuth callback, verifies state, upserts user, creates session, redirects
  */
 authRouter.get('/github/callback', async (req, res) => {
   const code = req.query.code as string;
   const state = req.query.state as string;
 
-  if (!state || !verifyOAuthState(state)) {
+  if (!state || !verifyAndClearOAuthState(req, res, state)) {
     logger.warn('OAuth callback rejected: Invalid or expired state parameter');
-    res.redirect('/?error=invalid_oauth_state');
+    res.redirect(`${env.APP_URL}/?error=invalid_oauth_state`);
     return;
   }
 
   if (!code) {
-    res.redirect('/?error=missing_code');
+    res.redirect(`${env.APP_URL}/?error=missing_code`);
     return;
   }
 
@@ -69,265 +67,101 @@ authRouter.get('/github/callback', async (req, res) => {
     const user = await findOrCreateUser(profile);
 
     await createSession(user.id, req, res);
-    memoryDb.logAudit(user.id, 'user_logged_in', { method: 'github_oauth' });
+    await db.logAudit(user.id, 'user_logged_in', { method: 'github_oauth' });
 
-    // Trigger initial sync in background if first time
-    const repos = memoryDb.getUserRepos(user.id);
+    // Check if user has an active GitHub App installation
+    const installation = await db.getInstallation(user.id);
+    if (!installation && env.GITHUB_APP_SLUG) {
+      // Direct user to install the GitHub App to choose repos
+      res.redirect(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
+      return;
+    }
+
+    // Trigger initial sync if first time
+    const repos = await db.getUserRepos(user.id);
     if (repos.length === 0) {
       runUserSync(user.id).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
     }
 
-    res.redirect('/');
+    res.redirect(`${env.APP_URL}/`);
   } catch (err: any) {
-    logger.error({ error: err.message }, 'OAuth callback failed');
-    res.redirect('/?error=auth_failed');
+    logger.error({ error: err.message }, 'OAuth callback processing failed');
+    res.redirect(`${env.APP_URL}/?error=auth_failed`);
   }
 });
 
 /**
- * Instant Demo Login (for developer setup & testing without GitHub OAuth keys)
+ * POST /auth/dev-login
+ * Local development only login endpoint. Strictly blocked in production.
  */
-authRouter.post('/demo-login', async (req, res) => {
-  if (env.NODE_ENV === 'production') {
-    res.status(403).json({ error: 'Forbidden', message: 'Demo login is disabled in production environments.' });
-    return;
-  }
-
-  const schema = z.object({
-    username: z.string().min(1).max(39).default('demo-developer'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  const username = parsed.success ? parsed.data.username : 'demo-developer';
-
-  const user = await findOrCreateUser({
-    id: 100001,
-    login: username,
-    name: username === 'demo-developer' ? 'Demo Developer' : username,
-    avatar_url: `https://avatars.githubusercontent.com/u/100001?v=4`,
-  });
-
-  const sessionToken = await createSession(user.id, req, res);
-  memoryDb.logAudit(user.id, 'user_logged_in', { method: 'demo' });
-
-  // Run initial sync
-  await runUserSync(user.id);
-
-  res.json({
-    ok: true,
-    user: {
-      id: user.id,
-      login: user.login,
-      name: user.name,
-      avatar_url: user.avatar_url,
-    },
-    token: sessionToken,
-  });
-});
-
-/**
- * Sign in using GitHub Personal Access Token (PAT)
- */
-authRouter.post('/token-login', async (req, res) => {
-  const schema = z.object({
-    token: z.string().min(1, 'Token is required'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Validation Error', message: 'GitHub token is required.' });
+authRouter.post('/dev-login', async (req, res) => {
+  if (env.NODE_ENV === 'production' || !env.DEV_LOGIN_ENABLED) {
+    res.status(403).json({
+      error: 'Forbidden',
+      message: 'Dev login is disabled in production environments.',
+    });
     return;
   }
 
   try {
-    const rawToken = parsed.data.token.trim();
-    const ghUser = await validateGitHubToken(rawToken);
-
-    const user = await findOrCreateUser({
-      id: ghUser.id,
-      login: ghUser.login,
-      name: ghUser.name || ghUser.login,
-      avatar_url: ghUser.avatar_url,
+    const user = await db.upsertUser({
+      github_user_id: '999999999',
+      login: 'dev-user',
+      name: 'Developer Mode',
+      avatar_url: 'https://avatars.githubusercontent.com/u/999999999?v=4',
     });
 
-    // Store token in active session store
-    userTokens.set(user.id, rawToken);
+    await createSession(user.id, req, res);
+    await db.logAudit(user.id, 'user_logged_in', { method: 'dev_login' });
 
-    const sessionToken = await createSession(user.id, req, res);
-    memoryDb.logAudit(user.id, 'user_logged_in', { method: 'pat' });
-
-    // Run initial live sync with PAT
-    await syncReposWithPat(user.id, rawToken);
+    // Run initial sync
+    const repos = await db.getUserRepos(user.id);
+    if (repos.length === 0) {
+      await runUserSync(user.id);
+    }
 
     res.json({
       ok: true,
       user: {
-        id: user.id,
+        id: String(user.id),
         login: user.login,
         name: user.name,
         avatar_url: user.avatar_url,
       },
-      token: sessionToken,
     });
   } catch (err: any) {
-    logger.error({ error: err.message }, 'PAT login failed');
-    res.status(401).json({ error: 'Authentication Failed', message: err.message || 'Invalid GitHub token' });
+    logger.error({ error: err.message }, 'Dev login failed');
+    res.status(500).json({ error: 'Internal Server Error', message: err.message });
   }
 });
 
 /**
- * Register a new Cloud Sync Account (with optional token vault storage)
- */
-authRouter.post('/signup', async (req, res) => {
-  const schema = z.object({
-    username: z.string().min(3).max(39).regex(/^[a-zA-Z0-9_-]+$/, 'Username must be alphanumeric, hyphen or underscore'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
-    token: z.string().optional(),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message || 'Invalid input.' });
-    return;
-  }
-
-  const { username, password, token } = parsed.data;
-
-  // Check if username already exists
-  const existing = memoryDb.findUserByLogin(username);
-  if (existing) {
-    res.status(400).json({ error: 'User Exists', message: 'Username is already registered. Please sign in.' });
-    return;
-  }
-
-  let ghUser: any = null;
-  const cleanToken = token?.trim() || null;
-  if (cleanToken) {
-    try {
-      ghUser = await validateGitHubToken(cleanToken);
-    } catch (err: any) {
-      res.status(400).json({ error: 'Token Error', message: `Invalid GitHub token: ${err.message}` });
-      return;
-    }
-  }
-
-  const passwordHash = hashPassword(password);
-  const newUser = memoryDb.createUser({
-    github_user_id: ghUser?.id || undefined,
-    login: username,
-    name: ghUser?.name || username,
-    avatar_url: ghUser?.avatar_url || `https://avatars.githubusercontent.com/u/${Math.floor(Math.random() * 100000)}?v=4`,
-    password_hash: passwordHash,
-    saved_token: cleanToken,
-  });
-
-
-  if (cleanToken) {
-    userTokens.set(newUser.id, cleanToken);
-    // Sync repos directly with PAT
-    try {
-      await syncReposWithPat(newUser.id, cleanToken);
-    } catch (e: any) {
-      logger.error({ err: e.message }, 'Initial sync error on signup');
-    }
-  } else {
-    try {
-      await runUserSync(newUser.id);
-    } catch (e: any) {
-      logger.error({ err: e.message }, 'Demo sync error on signup');
-    }
-  }
-
-  const sessionToken = await createSession(newUser.id, req, res);
-  memoryDb.logAudit(newUser.id, 'user_signed_up', { with_token: Boolean(cleanToken) });
-
-  res.json({
-    ok: true,
-    user: {
-      id: newUser.id,
-      login: newUser.login,
-      name: newUser.name,
-      avatar_url: newUser.avatar_url,
-    },
-    token: sessionToken,
-  });
-});
-
-/**
- * Log into Cloud Sync Account
- */
-authRouter.post('/login', async (req, res) => {
-  const schema = z.object({
-    username: z.string().min(1, 'Username is required'),
-    password: z.string().min(1, 'Password is required'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Validation Error', message: 'Username and password are required.' });
-    return;
-  }
-
-  const { username, password } = parsed.data;
-  const user = memoryDb.findUserByLogin(username);
-
-  if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
-    res.status(401).json({ error: 'Authentication Failed', message: 'Invalid username or password.' });
-    return;
-  }
-
-  // If user has saved token, restore it in memory and sync repos if empty
-  if (user.saved_token) {
-    userTokens.set(user.id, user.saved_token);
-    const existingRepos = memoryDb.getUserRepos(user.id);
-    if (existingRepos.length === 0) {
-      try {
-        await syncReposWithPat(user.id, user.saved_token);
-      } catch (e: any) {
-        logger.error({ err: e.message }, 'Sync error on user login');
-      }
-    }
-  }
-
-  const sessionToken = await createSession(user.id, req, res);
-  memoryDb.logAudit(user.id, 'user_logged_in', { method: 'password' });
-
-  res.json({
-    ok: true,
-    user: {
-      id: user.id,
-      login: user.login,
-      name: user.name,
-      avatar_url: user.avatar_url,
-    },
-    token: sessionToken,
-  });
-});
-
-
-
-/**
- * Sign out current session
+ * POST /auth/logout
+ * Sign out current active session and clear cookie
  */
 authRouter.post('/logout', async (req, res) => {
-  const token = req.cookies?.[COOKIE_NAME] || req.cookies?.['sid'] || req.headers['x-session-token'];
+  const cookieName = env.SESSION_COOKIE_NAME || (env.NODE_ENV === 'production' ? '__Host-sid' : 'sid');
+  const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'];
+
   if (token && typeof token === 'string') {
     await destroySession(token, res);
+  } else {
+    res.clearCookie(cookieName, { path: '/' });
+    res.clearCookie('sid', { path: '/' });
+    res.clearCookie('__Host-sid', { path: '/' });
   }
-  res.clearCookie(COOKIE_NAME);
-  res.clearCookie('sid');
+
   res.json({ ok: true, message: 'Signed out successfully' });
 });
 
 /**
- * Sign out everywhere - delete all sessions for user
+ * POST /auth/logout-all
+ * Sign out of all active sessions for current user
  */
 authRouter.post('/logout-all', requireAuth, async (req, res) => {
   if (req.user) {
     await destroyAllUserSessions(req.user.id, res);
-    memoryDb.logAudit(req.user.id, 'user_logged_out_all');
+    await db.logAudit(req.user.id, 'user_logged_out_all');
   }
-  res.clearCookie(COOKIE_NAME);
-  res.clearCookie('sid');
   res.json({ ok: true, message: 'Signed out of all active sessions' });
 });

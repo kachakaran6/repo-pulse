@@ -1,10 +1,9 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { env } from '../config/env.js';
-import { memoryDb, pool } from '../db/index.js';
+import { db } from '../db/index.js';
 import { logger } from '../utils/logger.js';
 
-export const COOKIE_NAME = 'sid';
 export const IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const ABSOLUTE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -13,7 +12,7 @@ export function hashToken(token: string): string {
 }
 
 export interface SessionData {
-  userId: number;
+  userId: string;
   idHash: string;
   createdAt: Date;
   lastSeenAt: Date;
@@ -24,7 +23,7 @@ export interface SessionData {
  * Generate a new 256-bit cryptographically secure session and store its SHA-256 hash
  */
 export async function createSession(
-  userId: number,
+  userId: string | number,
   req: Request,
   res: Response
 ): Promise<string> {
@@ -37,27 +36,21 @@ export async function createSession(
   const ipHash = crypto.createHash('sha256').update(ip).digest('hex').substring(0, 16);
   const ua = req.headers['user-agent'] || 'unknown';
 
-  if (pool) {
-    try {
-      await pool.query(
-        `INSERT INTO sessions (id_hash, user_id, created_at, last_seen_at, expires_at, ip_hash, ua)
-         VALUES ($1, $2, $3, $3, $4, $5, $6)`,
-        [tokenHash, userId, now, expiresAt, ipHash, ua]
-      );
-    } catch (err: any) {
-      logger.error({ error: err.message }, 'Failed to insert session into Postgres, falling back to memory store');
-      memoryDb.createSession({ id_hash: tokenHash, user_id: userId, expires_at: expiresAt, ip_hash: ipHash, ua });
-    }
-  } else {
-    memoryDb.createSession({ id_hash: tokenHash, user_id: userId, expires_at: expiresAt, ip_hash: ipHash, ua });
-  }
+  await db.createSession({
+    id_hash: tokenHash,
+    user_id: userId,
+    expires_at: expiresAt,
+    ip_hash: ipHash,
+    ua: String(ua).substring(0, 500),
+  });
 
+  const isProduction = env.NODE_ENV === 'production';
   const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const cookieName = env.SESSION_COOKIE_NAME || (isProduction ? '__Host-sid' : 'sid');
 
-  // Set standard session cookie with dynamic secure detection
-  res.cookie('sid', rawToken, {
+  res.cookie(cookieName, rawToken, {
     httpOnly: true,
-    secure: isHttps,
+    secure: isProduction ? true : isHttps,
     sameSite: 'lax',
     path: '/',
     maxAge: ABSOLUTE_LIFETIME_MS,
@@ -77,26 +70,7 @@ export async function validateSession(rawToken: string): Promise<SessionData | n
   const tokenHash = hashToken(rawToken);
   const now = new Date();
 
-  let session: any = null;
-
-  if (pool) {
-    try {
-      const res = await pool.query(
-        `SELECT id_hash, user_id, created_at, last_seen_at, expires_at
-         FROM sessions
-         WHERE id_hash = $1`,
-        [tokenHash]
-      );
-      if (res.rows.length > 0) {
-        session = res.rows[0];
-      }
-    } catch (err) {
-      session = memoryDb.findSession(tokenHash);
-    }
-  } else {
-    session = memoryDb.findSession(tokenHash);
-  }
-
+  const session = await db.findSession(tokenHash);
   if (!session) {
     return null;
   }
@@ -107,32 +81,23 @@ export async function validateSession(rawToken: string): Promise<SessionData | n
 
   // Check absolute lifetime (30 days)
   if (now.getTime() > expiresAt.getTime()) {
-    await destroySession(rawToken);
+    await db.deleteSession(tokenHash);
     return null;
   }
 
   // Check idle timeout (7 days)
   if (now.getTime() - lastSeenAt.getTime() > IDLE_TIMEOUT_MS) {
-    await destroySession(rawToken);
+    await db.deleteSession(tokenHash);
     return null;
   }
 
-  // Update last seen
-  if (pool) {
-    try {
-      await pool.query(
-        `UPDATE sessions SET last_seen_at = now() WHERE id_hash = $1`,
-        [tokenHash]
-      );
-    } catch {
-      memoryDb.updateSessionLastSeen(tokenHash);
-    }
-  } else {
-    memoryDb.updateSessionLastSeen(tokenHash);
-  }
+  // Update last seen in background
+  db.updateSessionLastSeen(tokenHash).catch((err) => {
+    logger.warn({ error: err.message }, 'Failed to update session last seen');
+  });
 
   return {
-    userId: Number(session.user_id),
+    userId: String(session.user_id),
     idHash: tokenHash,
     createdAt,
     lastSeenAt: now,
@@ -146,18 +111,13 @@ export async function validateSession(rawToken: string): Promise<SessionData | n
 export async function destroySession(rawToken: string, res?: Response): Promise<void> {
   if (rawToken) {
     const tokenHash = hashToken(rawToken);
-    if (pool) {
-      try {
-        await pool.query(`DELETE FROM sessions WHERE id_hash = $1`, [tokenHash]);
-      } catch {
-        memoryDb.deleteSession(tokenHash);
-      }
-    } else {
-      memoryDb.deleteSession(tokenHash);
-    }
+    await db.deleteSession(tokenHash);
   }
 
   if (res) {
+    const isProduction = env.NODE_ENV === 'production';
+    const cookieName = env.SESSION_COOKIE_NAME || (isProduction ? '__Host-sid' : 'sid');
+    res.clearCookie(cookieName, { path: '/' });
     res.clearCookie('sid', { path: '/' });
     res.clearCookie('__Host-sid', { path: '/' });
   }
@@ -166,18 +126,13 @@ export async function destroySession(rawToken: string, res?: Response): Promise<
 /**
  * Sign out everywhere - delete all sessions for a user
  */
-export async function destroyAllUserSessions(userId: number, res?: Response): Promise<void> {
-  if (pool) {
-    try {
-      await pool.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
-    } catch {
-      memoryDb.deleteAllUserSessions(userId);
-    }
-  } else {
-    memoryDb.deleteAllUserSessions(userId);
-  }
+export async function destroyAllUserSessions(userId: string | number, res?: Response): Promise<void> {
+  await db.deleteAllUserSessions(userId);
 
   if (res) {
+    const isProduction = env.NODE_ENV === 'production';
+    const cookieName = env.SESSION_COOKIE_NAME || (isProduction ? '__Host-sid' : 'sid');
+    res.clearCookie(cookieName, { path: '/' });
     res.clearCookie('sid', { path: '/' });
     res.clearCookie('__Host-sid', { path: '/' });
   }

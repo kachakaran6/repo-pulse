@@ -1,11 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
-import { COOKIE_NAME, validateSession } from './session.js';
-import { memoryDb, pool } from '../db/index.js';
+import { validateSession } from './session.js';
+import { db } from '../db/index.js';
 import { env } from '../config/env.js';
 
 export interface AuthenticatedUser {
-  id: number;
+  id: string;
   login: string;
   name: string;
   avatar_url: string;
@@ -24,7 +24,8 @@ declare global {
  * Authentication middleware: verifies session cookie, checks expiry, sets req.user
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const token = req.cookies?.[COOKIE_NAME] || req.cookies?.['sid'] || req.headers['x-session-token'];
+  const cookieName = env.SESSION_COOKIE_NAME || (env.NODE_ENV === 'production' ? '__Host-sid' : 'sid');
+  const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'];
 
   if (!token || typeof token !== 'string') {
     res.status(401).json({ error: 'Unauthorized', message: 'Authentication required. Please sign in.' });
@@ -37,60 +38,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  // Load user profile
-  let userRecord: any = null;
-  if (pool) {
-    try {
-      const res = await pool.query(
-        `SELECT id, login, name, avatar_url FROM users WHERE id = $1 AND deleted_at IS NULL`,
-        [session.userId]
-      );
-      if (res.rows.length > 0) {
-        userRecord = res.rows[0];
-      }
-    } catch {
-      userRecord = memoryDb.findUserById(session.userId);
-    }
-  } else {
-    userRecord = memoryDb.findUserById(session.userId);
-  }
-
+  const userRecord = await db.findUserById(session.userId);
   if (!userRecord) {
     res.status(401).json({ error: 'Unauthorized', message: 'User account not found.' });
     return;
   }
 
   req.user = {
-    id: Number(userRecord.id),
+    id: String(userRecord.id),
     login: userRecord.login,
     name: userRecord.name || userRecord.login,
     avatar_url: userRecord.avatar_url,
   };
   req.sessionIdHash = session.idHash;
 
-  next();
-}
-
-/**
- * Optional authentication middleware for public/hybrid endpoints
- */
-export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  const token = req.cookies?.[COOKIE_NAME] || req.cookies?.['sid'] || req.headers['x-session-token'];
-  if (token && typeof token === 'string') {
-    const session = await validateSession(token);
-    if (session) {
-      const userRecord = memoryDb.findUserById(session.userId);
-      if (userRecord) {
-        req.user = {
-          id: Number(userRecord.id),
-          login: userRecord.login,
-          name: userRecord.name || userRecord.login,
-          avatar_url: userRecord.avatar_url,
-        };
-        req.sessionIdHash = session.idHash;
-      }
-    }
-  }
   next();
 }
 
@@ -109,8 +70,13 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
-  // Skip in test environment if header is bypassed
-  if (env.NODE_ENV === 'test' && !req.headers['origin'] && !req.headers['referer']) {
+  // Custom client header verification
+  const customHeader =
+    req.headers['x-requested-with'] ||
+    req.headers['x-repopulse-client'] ||
+    req.headers['x-csrf-token'];
+
+  if (customHeader) {
     return next();
   }
 
@@ -118,20 +84,22 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
   const appUrl = env.APP_URL;
   const host = req.get('host');
 
-  // Custom client header verification
-  const customHeader = req.headers['x-requested-with'] || req.headers['x-repopulse-client'] || req.headers['x-csrf-token'];
-  const contentType = req.headers['content-type'];
-
-  // Accept valid requests with JSON content-type or custom header or matched origin
-  const isJsonMutation = typeof contentType === 'string' && contentType.includes('application/json');
   const isHostOrigin = origin && host ? origin.includes(host) : false;
-  const isSameOrigin = !origin || isHostOrigin || (appUrl && origin.startsWith(appUrl)) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1');
+  const isSameOrigin =
+    !origin ||
+    isHostOrigin ||
+    (appUrl && origin.startsWith(appUrl)) ||
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('http://127.0.0.1');
 
-  if (isSameOrigin || customHeader || isJsonMutation) {
+  if (isSameOrigin) {
     return next();
   }
 
-  res.status(403).json({ error: 'Forbidden', message: 'CSRF validation failed: Missing custom header or untrusted origin.' });
+  res.status(403).json({
+    error: 'Forbidden',
+    message: 'CSRF validation failed: Missing custom header or untrusted origin.',
+  });
 }
 
 /**
