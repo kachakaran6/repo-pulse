@@ -1,15 +1,14 @@
 import { Router } from 'express';
 import { requireAuth, syncRateLimiter } from '../auth/middleware.js';
 import { runUserSync } from '../sync/engine.js';
-import { syncReposWithPat, userTokens } from '../sync/github-pat.js';
-import { memoryDb } from '../db/index.js';
+import { db } from '../db/index.js';
 
 export const syncRouter = Router();
 
 syncRouter.use(requireAuth);
 
 // Map to track last sync timestamp per user for the 5-minute cooldown rule
-const lastUserSyncAttempt = new Map<number, number>();
+const lastUserSyncAttempt = new Map<string, number>();
 
 /**
  * POST /api/sync
@@ -35,9 +34,7 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
 
   lastUserSyncAttempt.set(userId, now);
 
-  // Trigger sync with PAT if present or standard engine
-  const pat = userTokens.get(userId);
-  const syncPromise = pat ? syncReposWithPat(userId, pat) : runUserSync(userId);
+  const syncPromise = runUserSync(userId);
 
   // In test / fast mode wait for completion; otherwise return job status
   if (req.query.wait === 'true' || process.env.NODE_ENV === 'test') {
@@ -47,6 +44,7 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
       status: result.status,
       repos_read: result.reposRead,
       message: `Synced ${result.reposRead} repositories.`,
+      paused_until: result.pausedUntil,
     });
     return;
   }
@@ -64,7 +62,7 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
  */
 syncRouter.get('/status', async (req, res) => {
   const userId = req.user!.id;
-  const latestRun = memoryDb.getLatestSyncRun(userId);
+  const latestRun = await db.getLatestSyncRun(userId);
 
   if (!latestRun) {
     res.json({

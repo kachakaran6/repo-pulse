@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
-import { memoryDb } from '../db/index.js';
+import { db } from '../db/index.js';
 import { statusOf, explainStatus, generateSummarySentence, type SummaryStats } from '../core/status.js';
 
 export const reposRouter = Router();
@@ -15,14 +15,14 @@ reposRouter.use(requireAuth);
  */
 reposRouter.get('/', async (req, res) => {
   const userId = req.user!.id;
-  const userSettings = memoryDb.getSettings(userId);
+  const userSettings = await db.getSettings(userId);
   const thresholds = {
     active: userSettings.active_days,
     cooling: userSettings.cooling_days,
     stale: userSettings.stale_days,
   };
 
-  const rawRepos = memoryDb.getUserRepos(userId);
+  const rawRepos = await db.getUserRepos(userId);
   const now = Date.now();
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -56,8 +56,8 @@ reposRouter.get('/', async (req, res) => {
     const isRetired = meta.decision === 'retire';
 
     return {
-      id: r.id,
-      github_repo_id: r.github_repo_id,
+      id: String(r.id),
+      github_repo_id: String(r.github_repo_id),
       full_name: r.full_name,
       is_private: r.is_private,
       default_branch: r.default_branch,
@@ -117,14 +117,14 @@ reposRouter.get('/', async (req, res) => {
  */
 reposRouter.get('/analytics', async (req, res) => {
   const userId = req.user!.id;
-  const userSettings = memoryDb.getSettings(userId);
+  const userSettings = await db.getSettings(userId);
   const thresholds = {
     active: userSettings.active_days,
     cooling: userSettings.cooling_days,
     stale: userSettings.stale_days,
   };
 
-  const rawRepos = memoryDb.getUserRepos(userId);
+  const rawRepos = await db.getUserRepos(userId);
   const now = Date.now();
   const dayMs = 864e5;
 
@@ -138,7 +138,6 @@ reposRouter.get('/analytics', async (req, res) => {
   const languagesMap: Record<string, number> = {};
   const globalDailyActivity: Record<string, number> = {};
 
-  // Initialize 90-day activity map
   for (let i = 89; i >= 0; i--) {
     const d = new Date(now - i * dayMs).toISOString().split('T')[0];
     globalDailyActivity[d] = 0;
@@ -179,11 +178,9 @@ reposRouter.get('/analytics', async (req, res) => {
       else deadCount++;
     }
 
-    // Language
     const lang = r.language || 'Other';
     languagesMap[lang] = (languagesMap[lang] || 0) + 1;
 
-    // Activity aggregation
     let repo90dCommits = 0;
     for (const act of r.activity || []) {
       if (act.day >= cutoff90d) {
@@ -204,7 +201,7 @@ reposRouter.get('/analytics', async (req, res) => {
     if (repo90dCommits > maxRepoCommits90d) {
       maxRepoCommits90d = repo90dCommits;
       mostActiveRepo = {
-        id: r.id,
+        id: String(r.id),
         name: r.full_name,
         commits_90d: repo90dCommits,
         language: r.language,
@@ -214,7 +211,7 @@ reposRouter.get('/analytics', async (req, res) => {
     if (explanation.days !== null && explanation.days > maxDormantDays) {
       maxDormantDays = explanation.days;
       oldestDormantRepo = {
-        id: r.id,
+        id: String(r.id),
         name: r.full_name,
         days_inactive: explanation.days,
         last_commit_at: r.last_commit_at ? new Date(r.last_commit_at).toISOString() : null,
@@ -222,7 +219,6 @@ reposRouter.get('/analytics', async (req, res) => {
     }
   }
 
-  // Language Breakdown sorted
   const totalWithLang = rawRepos.length || 1;
   const languages = Object.entries(languagesMap)
     .map(([name, count]) => ({
@@ -232,7 +228,6 @@ reposRouter.get('/analytics', async (req, res) => {
     }))
     .sort((a, b) => b.count - a.count);
 
-  // Health Score (0 - 100)
   const warmRatio = rawRepos.length > 0 ? (activeCount + coolingCount * 0.75) / rawRepos.length : 1;
   const commitHealthBonus = Math.min(25, totalCommits7d * 2);
   const healthScore = Math.min(100, Math.round(warmRatio * 75 + commitHealthBonus));
@@ -270,21 +265,11 @@ reposRouter.get('/analytics', async (req, res) => {
  * Updates custom label, goal date, note, or triage decision
  */
 reposRouter.patch('/:id/meta', async (req, res) => {
-
   const userId = req.user!.id;
-  const repoId = Number(req.params.id);
+  const repoId = req.params.id;
 
-  if (isNaN(repoId)) {
+  if (!repoId) {
     res.status(400).json({ error: 'Invalid repository ID' });
-    return;
-  }
-
-  // Strict tenant verification: make sure this repo belongs to the requesting user
-  const userRepos = memoryDb.getUserRepos(userId);
-  const repo = userRepos.find((r) => r.id === repoId);
-
-  if (!repo) {
-    res.status(404).json({ error: 'Repository not found or access denied' });
     return;
   }
 
@@ -302,18 +287,22 @@ reposRouter.patch('/:id/meta', async (req, res) => {
     return;
   }
 
-  const updatedMeta = memoryDb.upsertRepoMeta(repoId, userId, parsed.data);
-  memoryDb.logAudit(userId, 'repo_meta_updated', { repo_id: repoId, changes: parsed.data });
+  try {
+    const updatedMeta = await db.upsertRepoMeta(repoId, userId, parsed.data);
+    await db.logAudit(userId, 'repo_meta_updated', { repo_id: repoId, changes: parsed.data });
 
-  res.json({
-    ok: true,
-    meta: {
-      label: updatedMeta.label || null,
-      goal_date: updatedMeta.goal_date || null,
-      note: updatedMeta.note || null,
-      decision: updatedMeta.decision || null,
-      paused_until: updatedMeta.paused_until || null,
-      decided_at: updatedMeta.decided_at ? new Date(updatedMeta.decided_at).toISOString() : null,
-    },
-  });
+    res.json({
+      ok: true,
+      meta: {
+        label: updatedMeta.label || null,
+        goal_date: updatedMeta.goal_date || null,
+        note: updatedMeta.note || null,
+        decision: updatedMeta.decision || null,
+        paused_until: updatedMeta.paused_until || null,
+        decided_at: updatedMeta.decided_at ? new Date(updatedMeta.decided_at).toISOString() : null,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Database Error', message: err.message });
+  }
 });
