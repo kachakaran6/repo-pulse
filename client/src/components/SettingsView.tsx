@@ -217,23 +217,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Row 3: GitHub Connection Details */}
-      <div className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label">GitHub Integration</div>
-          <div className="settings-desc">
-            {installation.token_connected
-              ? 'Personal Access Token active. Repositories synchronize on demand.'
-              : installation.connected
-              ? `Connected to GitHub account ${installation.account_login} via GitHub App.`
-              : 'Operating in demo mode. Connect a token below to sync your real GitHub repositories.'}
-          </div>
-        </div>
-
-        <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
-          {installation.token_connected ? '🟢 Token Connected' : 'Read-only access'}
-        </span>
-      </div>
 
       {/* Row 3b: Personal Access Token Configuration */}
       <div className="settings-row">

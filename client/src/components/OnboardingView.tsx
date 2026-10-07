@@ -149,16 +149,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
           </p>
         </div>
 
-        {/* Option 2: GitHub OAuth App or Demo */}
+        {/* Demo Mode Action */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <a
-            href="/auth/github/start"
-            className="btn-outline"
-            style={{ padding: '8px 16px', fontSize: '13px' }}
-          >
-            Sign in with GitHub OAuth
-          </a>
-
           <button
             type="button"
             className="btn-outline"
@@ -166,7 +158,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             disabled={isLoading}
             style={{ padding: '8px 16px', fontSize: '13px' }}
           >
-            {isLoading ? 'Loading...' : 'Explore Demo Mode'}
+            {isLoading ? 'Loading...' : 'Or Explore with Demo Data'}
           </button>
         </div>
 
