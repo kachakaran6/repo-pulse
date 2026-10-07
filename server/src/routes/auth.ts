@@ -222,10 +222,18 @@ authRouter.post('/signup', async (req, res) => {
 
   if (cleanToken) {
     userTokens.set(newUser.id, cleanToken);
-    // Trigger sync
-    syncReposWithPat(newUser.id, cleanToken).catch((e) => logger.error({ err: e.message }, 'Background sync error'));
+    // Sync repos directly with PAT
+    try {
+      await syncReposWithPat(newUser.id, cleanToken);
+    } catch (e: any) {
+      logger.error({ err: e.message }, 'Initial sync error on signup');
+    }
   } else {
-    runUserSync(newUser.id).catch((e) => logger.error({ err: e.message }, 'Demo sync error'));
+    try {
+      await runUserSync(newUser.id);
+    } catch (e: any) {
+      logger.error({ err: e.message }, 'Demo sync error on signup');
+    }
   }
 
   await createSession(newUser.id, req, res);
@@ -265,9 +273,17 @@ authRouter.post('/login', async (req, res) => {
     return;
   }
 
-  // If user has saved token, restore it in memory
+  // If user has saved token, restore it in memory and sync repos if empty
   if (user.saved_token) {
     userTokens.set(user.id, user.saved_token);
+    const existingRepos = memoryDb.getUserRepos(user.id);
+    if (existingRepos.length === 0) {
+      try {
+        await syncReposWithPat(user.id, user.saved_token);
+      } catch (e: any) {
+        logger.error({ err: e.message }, 'Sync error on user login');
+      }
+    }
   }
 
   await createSession(user.id, req, res);

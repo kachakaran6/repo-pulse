@@ -73,6 +73,24 @@ export const App: React.FC = () => {
       setRepos(reposData.repos);
       setSummarySentence(reposData.summary);
       setStats(reposData.stats);
+
+      // If user is authenticated but has 0 repos, initiate auto-sync
+      if (reposData.repos.length === 0 && meData.user) {
+        setIsSyncing(true);
+        try {
+          const syncRes = await api.triggerSync(false);
+          if (syncRes.ok) {
+            const updated = await api.fetchRepos();
+            setRepos(updated.repos);
+            setSummarySentence(updated.summary);
+            setStats(updated.stats);
+          }
+        } catch {
+          // ignore cooldown or token absence
+        } finally {
+          setIsSyncing(false);
+        }
+      }
     } catch {
       // User is not signed in or session is unauthenticated
       setUser(null);
@@ -267,11 +285,13 @@ export const App: React.FC = () => {
   // Personal Access Token Login
   const handleTokenLogin = async (token: string) => {
     setIsLoading(true);
+    setIsSyncing(true);
     try {
       const res = await api.loginWithToken(token);
       await loadInitialData();
       showToast(`Authenticated as ${res.user.login} and repositories synced!`);
     } finally {
+      setIsSyncing(false);
       setIsLoading(false);
     }
   };
@@ -279,11 +299,13 @@ export const App: React.FC = () => {
   // Cloud Account Signup
   const handleSignup = async (username: string, password: string, token?: string) => {
     setIsLoading(true);
+    setIsSyncing(true);
     try {
       const res = await api.signupUser({ username, password, token });
       await loadInitialData();
       showToast(`Account created! Welcome, ${res.user.login}`);
     } finally {
+      setIsSyncing(false);
       setIsLoading(false);
     }
   };
@@ -291,20 +313,27 @@ export const App: React.FC = () => {
   // Cloud Account Login
   const handlePasswordLogin = async (username: string, password: string) => {
     setIsLoading(true);
+    setIsSyncing(true);
     try {
       const res = await api.loginUser({ username, password });
       await loadInitialData();
       showToast(`Welcome back, ${res.user.login}!`);
     } finally {
+      setIsSyncing(false);
       setIsLoading(false);
     }
   };
 
   // Connect Token from Settings
   const handleConnectToken = async (token: string) => {
-    const res = await api.connectToken(token);
-    await loadInitialData();
-    showToast(res.message || 'Token connected and synced');
+    setIsSyncing(true);
+    try {
+      const res = await api.connectToken(token);
+      await loadInitialData();
+      showToast(res.message || 'Token connected and synced');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Disconnect Token from Settings
@@ -314,7 +343,7 @@ export const App: React.FC = () => {
     showToast(res.message || 'Token disconnected');
   };
 
-  if (isLoading) {
+  if (isLoading && !user) {
     return (
       <div className="main-content" style={{ maxWidth: '1040px', margin: '40px auto', padding: '0 24px' }}>
         <div style={{ width: '100%', height: '36px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', marginBottom: '24px' }} />
@@ -370,18 +399,21 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'overview' && (
-            <OverviewView
-              repos={repos}
-              summarySentence={summarySentence}
-              currentUsername={user.login}
-              onOpenDetails={(r) => setSelectedRepoForDetail(r)}
-              thresholds={{
-                active: settings.active_days,
-                cooling: settings.cooling_days,
-                stale: settings.stale_days,
-              }}
-            />
-          )}
+        <OverviewView
+          repos={repos}
+          summarySentence={summarySentence}
+          currentUsername={user.login}
+          onOpenDetails={(r) => setSelectedRepoForDetail(r)}
+          thresholds={{
+            active: settings.active_days,
+            cooling: settings.cooling_days,
+            stale: settings.stale_days,
+          }}
+          isSyncing={isSyncing}
+          isLoading={isLoading}
+          onSync={handleSync}
+        />
+      )}
 
           {activeTab === 'analytics' && (
             <AnalyticsView />

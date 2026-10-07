@@ -1,11 +1,55 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 
 export const SkeletonRow: React.FC = () => {
   return (
-    <div className="skeleton-row" style={{ display: 'flex', alignItems: 'center', padding: '0 16px', justifyContent: 'space-between' }}>
-      <div style={{ width: '180px', height: '14px', backgroundColor: 'var(--line)', borderRadius: '2px' }} />
-      <div style={{ width: '80px', height: '14px', backgroundColor: 'var(--line)', borderRadius: '2px' }} />
-      <div style={{ width: '120px', height: '14px', backgroundColor: 'var(--line)', borderRadius: '2px' }} />
+    <div className="skeleton-row-item">
+      <div className="skeleton-shimmer" style={{ width: '220px', height: '14px' }} />
+      <div className="skeleton-shimmer" style={{ width: '90px', height: '14px' }} />
+      <div className="skeleton-shimmer" style={{ width: '140px', height: '14px' }} />
+    </div>
+  );
+};
+
+export const OverviewSkeleton: React.FC<{ message?: string }> = ({
+  message = 'Syncing your repositories and commit activity from GitHub...',
+}) => {
+  return (
+    <div className="overview-skeleton" aria-busy="true" aria-live="polite">
+      {/* Sync in-progress banner */}
+      <div className="sync-progress-banner">
+        <Loader2 size={18} strokeWidth={2} className="sync-spinner" aria-hidden="true" />
+        <span>{message}</span>
+      </div>
+
+      {/* Pulsing Summary Sentence */}
+      <div className="skeleton-shimmer skeleton-title" />
+
+      {/* Pulsing Heat Bar */}
+      <div className="skeleton-shimmer skeleton-heat-bar" />
+
+      {/* Pulsing Legend */}
+      <div className="skeleton-legend">
+        <div className="skeleton-shimmer skeleton-legend-pill" />
+        <div className="skeleton-shimmer skeleton-legend-pill" />
+        <div className="skeleton-shimmer skeleton-legend-pill" />
+        <div className="skeleton-shimmer skeleton-legend-pill" />
+      </div>
+
+      {/* Pulsing Search Bar */}
+      <div className="skeleton-shimmer skeleton-search" />
+
+      {/* 4 Status Groups Skeleton */}
+      {['Active', 'Cooling', 'Stale', 'Dead'].map((group) => (
+        <section key={group} style={{ marginBottom: '24px' }}>
+          <div className="skeleton-shimmer skeleton-group-header" />
+          <div style={{ borderTop: '1px solid var(--line)' }}>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        </section>
+      ))}
     </div>
   );
 };

@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import type { Repository, RepoStatus } from '../types.js';
 import { RepoRow } from './RepoRow.js';
+import { OverviewSkeleton } from './FeedbackComponents.js';
+import { Loader2, RefreshCw } from 'lucide-react';
 
 interface OverviewViewProps {
   repos: Repository[];
@@ -8,6 +10,9 @@ interface OverviewViewProps {
   currentUsername?: string;
   onOpenDetails: (repo: Repository) => void;
   thresholds: { active: number; cooling: number; stale: number };
+  isSyncing?: boolean;
+  isLoading?: boolean;
+  onSync?: () => Promise<void>;
 }
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
@@ -16,9 +21,42 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   currentUsername,
   onOpenDetails,
   thresholds,
+  isSyncing = false,
+  isLoading = false,
+  onSync,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | RepoStatus>('all');
+
+  // If initial sync / load is in progress and no repos are loaded yet, display rich skeleton
+  if ((isSyncing || isLoading) && repos.length === 0) {
+    return <OverviewSkeleton message="Syncing your repositories and commit activity from GitHub..." />;
+  }
+
+  // If no repositories exist at all and sync has completed
+  if (repos.length === 0 && !isSyncing && !isLoading) {
+    return (
+      <div style={{ padding: '48px 0', maxWidth: '640px' }}>
+        <h1 className="overview-summary" style={{ marginBottom: '16px' }}>
+          No repositories synced yet.
+        </h1>
+        <p style={{ color: 'var(--ink-2)', fontSize: '15px', lineHeight: 1.6, marginBottom: '24px' }}>
+          We could not find any repositories associated with your active session or token. Ensure your GitHub Personal Access Token has <code>repo</code> and <code>read:user</code> scopes enabled.
+        </p>
+        {onSync && (
+          <button
+            type="button"
+            className="landing-btn-primary"
+            onClick={onSync}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+          >
+            <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
+            <span>Sync Repositories Now</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   // Exclude retired repos from overview
   const activePool = useMemo(() => {
@@ -75,6 +113,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   return (
     <div>
+      {isSyncing && (
+        <div className="sync-progress-banner" style={{ marginBottom: '16px' }}>
+          <Loader2 size={16} strokeWidth={2} className="sync-spinner" aria-hidden="true" />
+          <span>Updating repository commit activity from GitHub...</span>
+        </div>
+      )}
+
       {/* 28px Summary Sentence (no box) */}
       <h1 className="overview-summary">{summarySentence}</h1>
 
