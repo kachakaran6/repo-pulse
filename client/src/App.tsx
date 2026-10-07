@@ -271,9 +271,6 @@ export const App: React.FC = () => {
       const res = await api.loginWithToken(token);
       await loadInitialData();
       showToast(`Authenticated as ${res.user.login} and repositories synced!`);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Token authentication failed');
-      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -286,9 +283,6 @@ export const App: React.FC = () => {
       const res = await api.signupUser({ username, password, token });
       await loadInitialData();
       showToast(`Account created! Welcome, ${res.user.login}`);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Signup failed');
-      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -301,9 +295,6 @@ export const App: React.FC = () => {
       const res = await api.loginUser({ username, password });
       await loadInitialData();
       showToast(`Welcome back, ${res.user.login}!`);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Login failed');
-      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -340,13 +331,6 @@ export const App: React.FC = () => {
       <>
         {toastMessage && (
           <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
-        )}
-        {errorMessage && (
-          <ErrorBanner
-            message={errorMessage}
-            actionText="Dismiss"
-            onAction={() => setErrorMessage(null)}
-          />
         )}
         <OnboardingView
           onTokenLogin={handleTokenLogin}

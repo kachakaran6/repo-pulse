@@ -382,7 +382,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                         style={{ width: '100%', height: '42px' }}
                         placeholder="Username"
                         value={accountUsername}
-                        onChange={(e) => setAccountUsername(e.target.value)}
+                        onChange={(e) => {
+                          setAccountUsername(e.target.value);
+                          if (accountError) setAccountError(null);
+                        }}
                         required
                         autoComplete="username"
                       />
@@ -398,7 +401,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                         style={{ width: '100%', height: '42px' }}
                         placeholder="Password (minimum 6 characters)"
                         value={accountPassword}
-                        onChange={(e) => setAccountPassword(e.target.value)}
+                        onChange={(e) => {
+                          setAccountPassword(e.target.value);
+                          if (accountError) setAccountError(null);
+                        }}
                         required
                         autoComplete={authTab === 'login' ? 'current-password' : 'new-password'}
                       />
@@ -418,7 +424,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                           style={{ width: '100%', height: '42px' }}
                           placeholder="Paste ghp_... to auto-sync across devices"
                           value={accountToken}
-                          onChange={(e) => setAccountToken(e.target.value)}
+                          onChange={(e) => {
+                            setAccountToken(e.target.value);
+                            if (accountError) setAccountError(null);
+                          }}
                           autoComplete="off"
                         />
                       </div>
@@ -857,7 +866,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                   style={{ width: '100%', height: '40px' }}
                   placeholder="Username"
                   value={accountUsername}
-                  onChange={(e) => setAccountUsername(e.target.value)}
+                  onChange={(e) => {
+                    setAccountUsername(e.target.value);
+                    if (accountError) setAccountError(null);
+                  }}
                   required
                 />
               </div>
@@ -872,7 +884,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                   style={{ width: '100%', height: '40px' }}
                   placeholder="••••••••"
                   value={accountPassword}
-                  onChange={(e) => setAccountPassword(e.target.value)}
+                  onChange={(e) => {
+                    setAccountPassword(e.target.value);
+                    if (accountError) setAccountError(null);
+                  }}
                   required
                 />
               </div>
@@ -888,7 +903,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                     style={{ width: '100%', height: '40px' }}
                     placeholder="ghp_..."
                     value={accountToken}
-                    onChange={(e) => setAccountToken(e.target.value)}
+                    onChange={(e) => {
+                      setAccountToken(e.target.value);
+                      if (accountError) setAccountError(null);
+                    }}
                   />
                 </div>
               )}
