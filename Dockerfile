@@ -28,6 +28,8 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+RUN apk add --no-cache curl wget
+
 ENV NODE_ENV=production
 ENV PORT=4000
 
@@ -41,7 +43,7 @@ COPY --from=client-builder /app/client/dist ./public
 
 EXPOSE 4000
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/healthz || exit 1
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:4000/healthz || exit 1
 
 CMD ["node", "dist/index.js"]

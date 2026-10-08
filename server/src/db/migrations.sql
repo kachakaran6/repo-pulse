@@ -11,6 +11,44 @@ BEGIN
 END
 $$;
 
+-- 0. Schema Reconciliation for Legacy Tables (Handles migration from v1 to v2)
+DO $$
+BEGIN
+  -- Reconcile legacy 'repos' table if created without 'id' PK (v1 schema used github_id as PK)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'repos' AND column_name = 'github_id'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'repos' AND column_name = 'id'
+  ) THEN
+    ALTER TABLE repos RENAME TO legacy_v1_repos;
+  END IF;
+
+  -- Reconcile legacy 'settings' table if created with single-row 'id' instead of 'user_id'
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'settings' AND column_name = 'active_max_days'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'settings' AND column_name = 'user_id'
+  ) THEN
+    ALTER TABLE settings RENAME TO legacy_v1_settings;
+  END IF;
+
+  -- Reconcile legacy 'users' table if created without 'id'
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'users'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'id'
+  ) THEN
+    ALTER TABLE users RENAME TO legacy_v1_users;
+  END IF;
+END
+$$;
+
 -- 1. Users Table
 CREATE TABLE IF NOT EXISTS users (
   id              BIGSERIAL PRIMARY KEY,
