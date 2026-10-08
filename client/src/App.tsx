@@ -268,6 +268,20 @@ export const App: React.FC = () => {
     showToast('Signed out everywhere');
   };
 
+  // Demo Login
+  const handleDemoLogin = async () => {
+    setIsLoading(true);
+    try {
+      await api.loginDemoUser();
+      await loadInitialData();
+      showToast('Welcome to RepoPulse Demo! Explore triage, ledger, and analytics.');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Demo login failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Dev Login
   const handleDevLogin = async () => {
     setIsLoading(true);
@@ -308,6 +322,7 @@ export const App: React.FC = () => {
         )}
         <OnboardingView
           onGithubLogin={handleGithubLogin}
+          onDemoLogin={handleDemoLogin}
           onDevLogin={handleDevLogin}
           isLoading={isLoading}
         />

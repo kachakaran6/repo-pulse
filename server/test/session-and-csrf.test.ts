@@ -80,4 +80,31 @@ describe('HTTP Security Headers & CSP (12-SECURITY.md)', () => {
 
     expect(res.status).toBe(200);
   });
+
+  it('GET /auth/status returns public auth configuration state without secrets', async () => {
+    const res = await request(app).get('/auth/status');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('githubConfigured');
+    expect(res.body).toHaveProperty('demoEnabled');
+    expect(res.body).toHaveProperty('appUrl');
+  });
+
+  it('GET /auth/github/start constructs dynamic redirect_uri matching host (never leaking localhost in live deployment)', async () => {
+    const res = await request(app)
+      .get('/auth/github/start')
+      .set('Host', 'nflvdye0x0n51ylz60whxkrl.kachakaran.me')
+      .set('X-Forwarded-Proto', 'https');
+
+    expect(res.status).toBe(302);
+    const location = res.headers.location;
+    expect(location).toBeDefined();
+    expect(location).not.toContain('localhost:5173');
+    expect(location).not.toContain('localhost:4000');
+    if (location.startsWith('https://github.com')) {
+      expect(location).toContain('redirect_uri=https%3A%2F%2Fnflvdye0x0n51ylz60whxkrl.kachakaran.me%2Fauth%2Fgithub%2Fcallback');
+    } else {
+      expect(location).toBe('/?error=github_not_configured');
+    }
+  });
 });

@@ -82,9 +82,9 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
 
   const origin = (req.headers['origin'] || req.headers['referer']) as string | undefined;
   const appUrl = env.APP_URL;
-  const host = req.get('host');
+  const host = req.get('x-forwarded-host') || req.get('host');
 
-  const isHostOrigin = origin && host ? origin.includes(host) : false;
+  const isHostOrigin = origin && host ? origin.includes(host.split(',')[0].trim()) : false;
   const isSameOrigin =
     !origin ||
     isHostOrigin ||

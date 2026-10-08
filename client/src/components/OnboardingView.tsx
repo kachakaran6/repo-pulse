@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Thermometer,
   Keyboard,
@@ -7,10 +7,18 @@ import {
   Minus,
   ArrowRight,
   Code2,
+  Sparkles,
+  AlertCircle,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from 'lucide-react';
+import { fetchAuthStatus } from '../api.js';
 
 interface OnboardingViewProps {
   onGithubLogin: () => void;
+  onDemoLogin?: () => Promise<void>;
   onDevLogin?: () => Promise<void>;
   isLoading?: boolean;
 }
@@ -86,45 +94,64 @@ const TRIAGE_SAMPLE_ACTIVITY = generateSampleActivity('cooling');
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({
   onGithubLogin,
+  onDemoLogin,
   onDevLogin,
   isLoading = false,
 }) => {
-  const [isDevLoggingIn, setIsDevLoggingIn] = useState(false);
+  const [isDemoLoggingIn, setIsDemoLoggingIn] = useState(false);
   const [devError, setDevError] = useState<string | null>(null);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [authStatus, setAuthStatus] = useState<{
+    githubConfigured: boolean;
+    demoEnabled: boolean;
+    appUrl: string;
+  }>({ githubConfigured: true, demoEnabled: true, appUrl: '' });
 
   // Check URL error parameter
   const searchParams = new URLSearchParams(window.location.search);
-  const urlError = searchParams.get('error');
+  const [urlError, setUrlError] = useState<string | null>(searchParams.get('error'));
 
-  const getErrorMessage = (errCode: string | null) => {
-    switch (errCode) {
-      case 'invalid_oauth_state':
-        return 'Session expired or state mismatch during GitHub sign in. Please try again.';
-      case 'missing_code':
-        return 'GitHub did not return an authorization code. Please try again.';
-      case 'auth_failed':
-        return 'GitHub authentication failed. Please try again.';
-      case 'github_not_configured':
-        return 'GitHub App is not configured. Please use Dev Login in local development.';
-      default:
-        return null;
+  useEffect(() => {
+    fetchAuthStatus().then((status) => {
+      setAuthStatus(status);
+    });
+  }, []);
+
+  const clearErrorParam = () => {
+    setUrlError(null);
+    setDevError(null);
+    if (window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   };
 
-  const errorMessage = devError || getErrorMessage(urlError);
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
 
-  const handleDevLogin = async () => {
-    if (!onDevLogin) return;
-    setIsDevLoggingIn(true);
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com';
+  const callbackUrl = `${currentOrigin}/auth/github/callback`;
+
+  const handleDemoOrDevLogin = async () => {
+    setIsDemoLoggingIn(true);
     setDevError(null);
     try {
-      await onDevLogin();
+      if (onDemoLogin) {
+        await onDemoLogin();
+      } else if (onDevLogin) {
+        await onDevLogin();
+      }
     } catch (err: any) {
-      setDevError(err.message || 'Dev login failed');
+      setDevError(err.message || 'Demo sign-in failed');
     } finally {
-      setIsDevLoggingIn(false);
+      setIsDemoLoggingIn(false);
     }
   };
+
+  const isGithubUnconfigured = urlError === 'github_not_configured' || (!authStatus.githubConfigured && !urlError);
 
   return (
     <div className="landing-page">
@@ -139,16 +166,17 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             <button
               type="button"
               className="landing-nav-link"
-              onClick={onGithubLogin}
+              onClick={handleDemoOrDevLogin}
+              disabled={isDemoLoggingIn || isLoading}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
             >
-              Sign in
+              Live Demo
             </button>
             <button
               type="button"
               className="landing-btn-primary"
               onClick={onGithubLogin}
-              disabled={isLoading}
+              disabled={isLoading || isDemoLoggingIn}
             >
               Sign in with GitHub
             </button>
@@ -169,43 +197,135 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               RepoPulse reads your GitHub commits and sorts every repo into Active, Cooling, Stale or Dead. Then you decide what to keep, pause or retire.
             </p>
 
-            {errorMessage && (
-              <div className="landing-form-error" style={{ marginBottom: '16px' }}>
-                {errorMessage}
+            {/* Error / Configuration Guide Card */}
+            {(urlError || devError || (!authStatus.githubConfigured && !urlError)) && (
+              <div className={`landing-alert-card ${isGithubUnconfigured ? '' : 'error'}`}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <AlertCircle size={18} strokeWidth={2} style={{ color: isGithubUnconfigured ? 'var(--heat-cooling)' : 'var(--heat-active)', marginTop: '2px', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)', marginBottom: '4px' }}>
+                        {isGithubUnconfigured ? 'GitHub App Configuration Required' : 'Authentication Notice'}
+                      </div>
+                      <div style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                        {isGithubUnconfigured
+                          ? 'GitHub OAuth credentials have not been configured on this instance yet. You can explore the full application immediately with Demo Mode, or configure GitHub credentials in your Coolify dashboard.'
+                          : urlError === 'invalid_oauth_state'
+                          ? 'OAuth session expired. Please try signing in again.'
+                          : urlError === 'missing_code'
+                          ? 'GitHub authorization code was missing. Please try again.'
+                          : devError || 'Authentication encountered an error. Please try again.'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearErrorParam}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-2)', padding: '2px' }}
+                    title="Dismiss"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {isGithubUnconfigured && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="landing-btn-primary"
+                      style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
+                      onClick={handleDemoOrDevLogin}
+                      disabled={isDemoLoggingIn || isLoading}
+                    >
+                      <Sparkles size={14} style={{ marginRight: '6px' }} />
+                      {isDemoLoggingIn ? 'Launching Demo...' : 'Explore Live Demo (1-Click)'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="landing-btn-secondary"
+                      style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
+                      onClick={() => setShowSetupGuide(!showSetupGuide)}
+                    >
+                      {showSetupGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      <span>{showSetupGuide ? 'Hide Coolify Setup Guide' : 'How to configure in Coolify'}</span>
+                    </button>
+                  </div>
+                )}
+
+                {showSetupGuide && isGithubUnconfigured && (
+                  <div className="landing-setup-guide">
+                    <p style={{ fontWeight: 600, marginBottom: '6px' }}>1. GitHub App Settings (on github.com/settings/apps):</p>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px' }}>Homepage URL:</div>
+                    <div className="landing-code-snippet">
+                      <span>{currentOrigin}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(currentOrigin, 'origin')}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)' }}
+                        title="Copy Homepage URL"
+                      >
+                        {copiedKey === 'origin' ? <Check size={14} color="var(--heat-cooling)" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', marginTop: '8px' }}>Authorization callback URL:</div>
+                    <div className="landing-code-snippet">
+                      <span>{callbackUrl}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(callbackUrl, 'cb')}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)' }}
+                        title="Copy Callback URL"
+                      >
+                        {copiedKey === 'cb' ? <Check size={14} color="var(--heat-cooling)" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+
+                    <p style={{ fontWeight: 600, marginTop: '12px', marginBottom: '6px' }}>2. Environment Variables to add in Coolify:</p>
+                    <ul style={{ paddingLeft: '18px', margin: '4px 0', fontSize: '12px', color: 'var(--ink-2)' }}>
+                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_CLIENT_ID</strong> (Client ID of your GitHub App)</li>
+                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_CLIENT_SECRET</strong> (Client Secret generated for your GitHub App)</li>
+                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_APP_ID</strong> (Numeric GitHub App ID)</li>
+                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_PRIVATE_KEY_BASE64</strong> (Base64 encoded RSA private key)</li>
+                      <li><strong style={{ color: 'var(--ink)' }}>APP_URL</strong>: <code>{currentOrigin}</code></li>
+                      <li><strong style={{ color: 'var(--ink)' }}>API_URL</strong>: <code>{currentOrigin}</code></li>
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start' }}>
-              <button
-                type="button"
-                className="landing-btn-primary"
-                style={{ height: '48px', padding: '0 24px', fontSize: '15px' }}
-                onClick={onGithubLogin}
-                disabled={isLoading}
-              >
-                Sign in with GitHub
-                <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" style={{ marginLeft: '8px' }} />
-              </button>
+            {/* Main CTA Action Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start', width: '100%' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="landing-btn-primary"
+                  style={{ height: '48px', padding: '0 24px', fontSize: '15px' }}
+                  onClick={onGithubLogin}
+                  disabled={isLoading || isDemoLoggingIn}
+                >
+                  Sign in with GitHub
+                  <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" style={{ marginLeft: '8px' }} />
+                </button>
+
+                <button
+                  id="dev-login-btn"
+                  type="button"
+                  className="landing-btn-secondary"
+                  style={{ height: '48px', padding: '0 20px', fontSize: '15px' }}
+                  onClick={handleDemoOrDevLogin}
+                  disabled={isDemoLoggingIn || isLoading}
+                >
+                  <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <span>{isDemoLoggingIn ? 'Signing in...' : 'Explore Live Demo'}</span>
+                </button>
+              </div>
 
               <p className="landing-hero-note">
-                Read-only access. You choose which repositories to connect.
+                Read-only access. Or test-drive all triage, ledger, and analytics features instantly in demo mode.
               </p>
-
-              {onDevLogin && (
-                <div style={{ marginTop: '8px' }}>
-                  <button
-                    id="dev-login-btn"
-                    type="button"
-                    className="landing-link-quiet"
-                    onClick={handleDevLogin}
-                    disabled={isDevLoggingIn || isLoading}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <Code2 size={14} strokeWidth={1.75} aria-hidden="true" />
-                    <span>{isDevLoggingIn ? 'Signing in...' : 'Dev login (local mode)'}</span>
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 

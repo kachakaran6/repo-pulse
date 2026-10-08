@@ -59,6 +59,11 @@ export const Shell: React.FC<ShellProps> = ({
             >
               <span className="brand-dot" />
               RepoPulse
+              {user?.login === 'demo-user' && (
+                <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: 'var(--r-pill)', backgroundColor: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--line)', letterSpacing: 'normal' }}>
+                  Demo Mode
+                </span>
+              )}
             </a>
 
             {user && (

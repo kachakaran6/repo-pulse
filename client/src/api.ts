@@ -127,8 +127,40 @@ export async function fetchSyncStatus(): Promise<SyncStatus> {
   return res.json();
 }
 
+export async function fetchAuthStatus(): Promise<{
+  githubConfigured: boolean;
+  demoEnabled: boolean;
+  appUrl: string;
+  clientId?: string | null;
+}> {
+  try {
+    const res = await fetch('/auth/status', {
+      headers: getHeaders(),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback gracefully
+  }
+  return { githubConfigured: true, demoEnabled: true, appUrl: '' };
+}
+
 export function loginWithGithub(): void {
   window.location.href = '/auth/github/start';
+}
+
+export async function loginDemoUser(): Promise<{ ok: boolean; user: UserProfile }> {
+  const res = await fetch(`/auth/demo-login`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Demo login failed');
+  }
+  return res.json();
 }
 
 export async function loginDevUser(): Promise<{ ok: boolean; user: UserProfile }> {
