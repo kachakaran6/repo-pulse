@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { UserSettings, InstallationStatus, ThemeChoice } from '../types.js';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Key, Check, AlertCircle, Unlink } from 'lucide-react';
 
 interface SettingsViewProps {
   settings: UserSettings;
@@ -8,6 +8,9 @@ interface SettingsViewProps {
   onUpdateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
   onExportData: () => void;
   onDeleteAccount: () => Promise<void>;
+  onConnectToken?: (token: string) => Promise<void>;
+  onDisconnectGitHub?: () => Promise<void>;
+  onGithubLogin?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -16,6 +19,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateSettings,
   onExportData,
   onDeleteAccount,
+  onConnectToken,
+  onDisconnectGitHub,
+  onGithubLogin,
 }) => {
   const [activeDays, setActiveDays] = useState(settings.active_days);
   const [coolingDays, setCoolingDays] = useState(settings.cooling_days);
@@ -27,6 +33,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Token input state
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  const [isConnectingToken, setIsConnectingToken] = useState(false);
+  const [tokenMessage, setTokenMessage] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  const handleTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!githubToken.trim() || !onConnectToken) return;
+    setIsConnectingToken(true);
+    setTokenError(null);
+    setTokenMessage(null);
+    try {
+      await onConnectToken(githubToken.trim());
+      setTokenMessage('GitHub connected successfully! Repositories are now syncing.');
+      setGithubToken('');
+      setShowTokenInput(false);
+    } catch (err: any) {
+      setTokenError(err.message || 'Failed to connect token');
+    } finally {
+      setIsConnectingToken(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!onDisconnectGitHub) return;
+    if (window.confirm('Disconnect your GitHub account?')) {
+      await onDisconnectGitHub();
+    }
+  };
 
   // Determine if threshold values changed from saved settings
   const hasThresholdsChanged =
@@ -146,28 +184,99 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </form>
 
-      {/* Row 2: GitHub App Installation */}
+      {/* Row 2: GitHub Account Connection */}
       <div className="settings-row">
         <div className="settings-meta">
-          <div className="settings-label">GitHub App Connection</div>
+          <div className="settings-label">GitHub Account Connection</div>
           <div className="settings-desc">
             {installation.connected
-              ? `Connected to account ${installation.account_login || ''}. Manage which repositories RepoPulse can read on GitHub.`
-              : 'Connect the RepoPulse GitHub App to select which repositories to synchronize.'}
+              ? `Connected to GitHub ${installation.account_login ? `(@${installation.account_login})` : ''}. Repositories are automatically synchronized.`
+              : 'Link your GitHub account or connect a Personal Access Token to sync your repositories and commit activity.'}
           </div>
+          {tokenMessage && (
+            <div style={{ color: 'var(--heat-cooling)', fontSize: '13px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={14} /> {tokenMessage}
+            </div>
+          )}
+          {tokenError && (
+            <div style={{ color: 'var(--heat-active)', fontSize: '13px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <AlertCircle size={14} /> {tokenError}
+            </div>
+          )}
         </div>
 
-        <div>
-          <a
-            href="https://github.com/settings/installations"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-outline"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', textDecoration: 'none' }}
-          >
-            <span>{installation.connected ? 'Manage on GitHub' : 'Install GitHub App'}</span>
-            <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
-          </a>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+          {installation.connected ? (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <a
+                href="https://github.com/settings/installations"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-outline"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', textDecoration: 'none' }}
+              >
+                <span>Manage on GitHub</span>
+                <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
+              </a>
+              {onDisconnectGitHub && (
+                <button
+                  type="button"
+                  className="btn-quiet"
+                  onClick={handleDisconnect}
+                  style={{ color: 'var(--heat-active)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}
+                  title="Disconnect GitHub account"
+                >
+                  <Unlink size={14} /> Disconnect
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {onGithubLogin && (
+                  <button
+                    type="button"
+                    className="btn-ink"
+                    onClick={onGithubLogin}
+                    style={{ fontSize: '13px', padding: '6px 14px' }}
+                  >
+                    Connect via GitHub OAuth
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setShowTokenInput(!showTokenInput)}
+                  style={{ fontSize: '13px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Key size={14} />
+                  <span>{showTokenInput ? 'Cancel' : 'Connect Personal Access Token'}</span>
+                </button>
+              </div>
+
+              {showTokenInput && (
+                <form onSubmit={handleTokenSubmit} style={{ display: 'flex', gap: '6px', width: '100%', maxWidth: '380px', marginTop: '4px' }}>
+                  <input
+                    type="password"
+                    placeholder="ghp_... (read:user, repo:read)"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    className="inline-num-input"
+                    style={{ flex: 1, padding: '6px 10px', width: 'auto', textAlign: 'left', fontFamily: 'var(--mono)', fontSize: '12px' }}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="btn-ink"
+                    disabled={isConnectingToken || !githubToken.trim()}
+                    style={{ fontSize: '12px', padding: '6px 12px', whiteSpace: 'nowrap' }}
+                  >
+                    {isConnectingToken ? 'Verifying...' : 'Save & Sync'}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

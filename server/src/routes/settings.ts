@@ -32,12 +32,14 @@ settingsRouter.get('/me', async (req, res) => {
     id: String(user.id),
     login: user.login,
     avatarUrl: user.avatar_url,
-    hasInstallation: Boolean(installation),
+    hasInstallation: Boolean(installation || (user as any).github_token),
     user: {
       id: String(user.id),
       login: user.login,
       name: user.name,
       avatar_url: user.avatar_url,
+      email: (user as any).email || null,
+      github_user_id: (user as any).github_user_id || null,
       created_at: user.created_at ? new Date(user.created_at).toISOString() : null,
     },
     settings: {
@@ -51,6 +53,12 @@ settingsRouter.get('/me', async (req, res) => {
           connected: true,
           account_login: installation.account_login,
           github_installation_id: String(installation.github_installation_id),
+        }
+      : (user as any).github_token
+      ? {
+          connected: true,
+          token_connected: true,
+          account_login: user.login,
         }
       : {
           connected: false,

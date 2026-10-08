@@ -102,13 +102,24 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
     }
 
     const installation = await db.getInstallation(userId);
+    const userGithubToken = (user as any).github_token as string | null | undefined;
 
-    // If live GitHub App installation token is available, we execute live GitHub sync
+    // If live GitHub token or App installation token is available, execute live GitHub sync
     let reposSynced = 0;
 
-    if (installation && env.GITHUB_APP_ID && env.GITHUB_PRIVATE_KEY_BASE64) {
+    let activeToken: string | null = null;
+    if (userGithubToken) {
+      activeToken = userGithubToken;
+    } else if (installation && env.GITHUB_APP_ID && env.GITHUB_PRIVATE_KEY_BASE64) {
       try {
-        const instToken = await getInstallationToken(installation.github_installation_id);
+        activeToken = await getInstallationToken(installation.github_installation_id);
+      } catch (tokenErr: any) {
+        logger.warn({ error: tokenErr.message }, 'Failed to mint GitHub App token');
+      }
+    }
+
+    if (activeToken) {
+      try {
         const now = new Date();
         const since90Days = new Date(now.getTime() - 90 * 864e5).toISOString();
 
@@ -119,7 +130,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           const gqlRes = await fetch('https://api.github.com/graphql', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${instToken}`,
+              'Authorization': `Bearer ${activeToken}`,
               'Content-Type': 'application/json',
               'User-Agent': 'RepoPulse-v2',
             },

@@ -268,6 +268,64 @@ export const App: React.FC = () => {
     showToast('Signed out everywhere');
   };
 
+  // Register Account
+  const handleRegister = async (params: { login: string; email?: string; password: string; name?: string }) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await api.registerUser(params);
+      await loadInitialData();
+      showToast(`Account created! Welcome, @${params.login}`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Registration failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Password Sign In
+  const handlePasswordLogin = async (params: { loginOrEmail: string; password: string }) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await api.loginWithPassword(params);
+      await loadInitialData();
+      showToast('Signed in successfully');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Sign in failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Connect GitHub Token (PAT)
+  const handleConnectToken = async (token: string) => {
+    setIsSyncing(true);
+    try {
+      const res = await api.connectGitHubToken(token);
+      await loadInitialData();
+      showToast(res.message || 'GitHub account connected!');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to connect GitHub');
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Disconnect GitHub
+  const handleDisconnectGitHub = async () => {
+    try {
+      await api.disconnectGitHub();
+      await loadInitialData();
+      showToast('GitHub disconnected');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to disconnect GitHub');
+    }
+  };
+
   // Demo Login
   const handleDemoLogin = async () => {
     setIsLoading(true);
@@ -322,6 +380,8 @@ export const App: React.FC = () => {
         )}
         <OnboardingView
           onGithubLogin={handleGithubLogin}
+          onRegister={handleRegister}
+          onPasswordLogin={handlePasswordLogin}
           onDemoLogin={handleDemoLogin}
           onDevLogin={handleDevLogin}
           isLoading={isLoading}
@@ -396,6 +456,9 @@ export const App: React.FC = () => {
           onUpdateSettings={handleUpdateSettings}
           onExportData={handleExportData}
           onDeleteAccount={handleDeleteAccount}
+          onConnectToken={handleConnectToken}
+          onDisconnectGitHub={handleDisconnectGitHub}
+          onGithubLogin={handleGithubLogin}
         />
       )}
 

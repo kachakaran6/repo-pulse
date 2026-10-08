@@ -96,7 +96,7 @@ export const db = {
   // 1. Users (via authPool)
   async findUserById(id: string | number) {
     const res = await authPool.query(
-      `SELECT id, github_user_id, login, name, avatar_url, created_at, deleted_at 
+      `SELECT id, github_user_id, login, name, avatar_url, email, password_hash, github_token, created_at, deleted_at 
        FROM users 
        WHERE id = $1 AND deleted_at IS NULL`,
       [String(id)]
@@ -106,10 +106,83 @@ export const db = {
 
   async findUserByGithubId(githubUserId: string | number) {
     const res = await authPool.query(
-      `SELECT id, github_user_id, login, name, avatar_url, created_at, deleted_at 
+      `SELECT id, github_user_id, login, name, avatar_url, email, password_hash, github_token, created_at, deleted_at 
        FROM users 
        WHERE github_user_id = $1 AND deleted_at IS NULL`,
       [String(githubUserId)]
+    );
+    return res.rows[0] || null;
+  },
+
+  async findUserByLoginOrEmail(identifier: string) {
+    const clean = identifier.trim().toLowerCase();
+    const res = await authPool.query(
+      `SELECT id, github_user_id, login, name, avatar_url, email, password_hash, github_token, created_at, deleted_at
+       FROM users
+       WHERE (LOWER(login) = $1 OR LOWER(email) = $1) AND deleted_at IS NULL
+       LIMIT 1`,
+      [clean]
+    );
+    return res.rows[0] || null;
+  },
+
+  async createUserWithPassword(params: {
+    login: string;
+    email?: string | null;
+    password_hash: string;
+    name?: string | null;
+    avatar_url?: string | null;
+  }) {
+    const cleanLogin = params.login.trim();
+    const cleanEmail = params.email ? params.email.trim().toLowerCase() : null;
+    const defaultAvatar = params.avatar_url || `https://avatars.githubusercontent.com/u/0?v=4`;
+
+    const res = await authPool.query(
+      `INSERT INTO users (login, email, password_hash, name, avatar_url)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, github_user_id, login, name, avatar_url, email, created_at`,
+      [cleanLogin, cleanEmail, params.password_hash, params.name || cleanLogin, defaultAvatar]
+    );
+    const row = res.rows[0];
+
+    // Ensure default settings exist
+    await authPool.query(
+      `INSERT INTO settings (user_id, active_days, cooling_days, stale_days, theme)
+       VALUES ($1, 7, 14, 30, 'system')
+       ON CONFLICT (user_id) DO NOTHING`,
+      [row.id]
+    );
+
+    return row;
+  },
+
+  async linkGithubToUser(userId: string | number, githubProfile: {
+    github_user_id: string | number;
+    login?: string;
+    avatar_url?: string;
+  }) {
+    const ghId = String(githubProfile.github_user_id);
+    const res = await authPool.query(
+      `UPDATE users 
+       SET github_user_id = $1, 
+           avatar_url = COALESCE($2, avatar_url),
+           deleted_at = NULL
+       WHERE id = $3
+       RETURNING id, github_user_id, login, name, avatar_url, email, created_at`,
+      [ghId, githubProfile.avatar_url || null, String(userId)]
+    );
+    return res.rows[0] || null;
+  },
+
+  async linkTokenToUser(userId: string | number, token: string, githubInfo?: { github_user_id?: string | number; login?: string; avatar_url?: string }) {
+    const res = await authPool.query(
+      `UPDATE users
+       SET github_token = $1,
+           github_user_id = COALESCE($2, github_user_id),
+           avatar_url = COALESCE($3, avatar_url)
+       WHERE id = $4
+       RETURNING id, github_user_id, login, name, avatar_url, email, created_at`,
+      [token, githubInfo?.github_user_id ? String(githubInfo.github_user_id) : null, githubInfo?.avatar_url || null, String(userId)]
     );
     return res.rows[0] || null;
   },

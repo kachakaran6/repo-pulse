@@ -917,6 +917,47 @@ a {
   padding: 20px;
 }
 
+.landing-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 440px;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 20px;
+}
+
+.landing-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.landing-auth-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.landing-auth-input {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--ink);
+  background-color: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.landing-auth-input:focus {
+  border-color: var(--ink);
+  background-color: var(--surface);
+}
+
 .landing-cloud-subtabs {
   display: flex;
   gap: 6px;

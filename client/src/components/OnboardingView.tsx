@@ -18,6 +18,8 @@ import { fetchAuthStatus } from '../api.js';
 
 interface OnboardingViewProps {
   onGithubLogin: () => void;
+  onRegister?: (params: { login: string; email?: string; password: string; name?: string }) => Promise<void>;
+  onPasswordLogin?: (params: { loginOrEmail: string; password: string }) => Promise<void>;
   onDemoLogin?: () => Promise<void>;
   onDevLogin?: () => Promise<void>;
   isLoading?: boolean;
@@ -94,10 +96,13 @@ const TRIAGE_SAMPLE_ACTIVITY = generateSampleActivity('cooling');
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({
   onGithubLogin,
+  onRegister,
+  onPasswordLogin,
   onDemoLogin,
   onDevLogin,
   isLoading = false,
 }) => {
+  const [authTab, setAuthTab] = useState<'github' | 'signup' | 'signin'>('github');
   const [isDemoLoggingIn, setIsDemoLoggingIn] = useState(false);
   const [devError, setDevError] = useState<string | null>(null);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
@@ -107,6 +112,19 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     demoEnabled: boolean;
     appUrl: string;
   }>({ githubConfigured: true, demoEnabled: true, appUrl: '' });
+
+  // Signup form state
+  const [signupLogin, setSignupLogin] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
+
+  // Signin form state
+  const [signinIdentifier, setSigninIdentifier] = useState('');
+  const [signinPassword, setSigninPassword] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signinError, setSigninError] = useState<string | null>(null);
 
   // Check URL error parameter
   const searchParams = new URLSearchParams(window.location.search);
@@ -121,6 +139,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
   const clearErrorParam = () => {
     setUrlError(null);
     setDevError(null);
+    setSignupError(null);
+    setSigninError(null);
     if (window.history.replaceState) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -151,6 +171,41 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     }
   };
 
+  const handleSignupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onRegister) return;
+    setIsSigningUp(true);
+    setSignupError(null);
+    try {
+      await onRegister({
+        login: signupLogin.trim(),
+        email: signupEmail.trim() || undefined,
+        password: signupPassword,
+      });
+    } catch (err: any) {
+      setSignupError(err.message || 'Account creation failed');
+    } finally {
+      setIsSigningUp(false);
+    }
+  };
+
+  const handleSigninSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onPasswordLogin) return;
+    setIsSigningIn(true);
+    setSigninError(null);
+    try {
+      await onPasswordLogin({
+        loginOrEmail: signinIdentifier.trim(),
+        password: signinPassword,
+      });
+    } catch (err: any) {
+      setSigninError(err.message || 'Sign in failed');
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   const isGithubUnconfigured = urlError === 'github_not_configured' || (!authStatus.githubConfigured && !urlError);
 
   return (
@@ -174,11 +229,25 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             </button>
             <button
               type="button"
+              className="landing-nav-link"
+              onClick={() => {
+                setAuthTab('signin');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
               className="landing-btn-primary"
-              onClick={onGithubLogin}
+              onClick={() => {
+                setAuthTab('signup');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               disabled={isLoading || isDemoLoggingIn}
             >
-              Sign in with GitHub
+              Create Account
             </button>
           </nav>
         </div>
@@ -209,9 +278,11 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                       </div>
                       <div style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5 }}>
                         {isGithubUnconfigured
-                          ? 'GitHub OAuth credentials have not been configured on this instance yet. You can explore the full application immediately with Demo Mode, or configure GitHub credentials in your Coolify dashboard.'
+                          ? 'GitHub OAuth credentials have not been configured on this instance yet. You can create an account below, explore with Demo Mode, or configure GitHub credentials in your Coolify dashboard.'
                           : urlError === 'invalid_oauth_state'
                           ? 'OAuth session expired. Please try signing in again.'
+                          : urlError === 'auth_failed'
+                          ? 'GitHub OAuth token exchange failed (please check your GitHub App Callback URL matches the one below). You can create an account below and connect via token or OAuth inside your dashboard!'
                           : urlError === 'missing_code'
                           ? 'GitHub authorization code was missing. Please try again.'
                           : devError || 'Authentication encountered an error. Please try again.'}
@@ -228,48 +299,33 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                   </button>
                 </div>
 
-                {isGithubUnconfigured && (
-                  <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                    <button
-                      type="button"
-                      className="landing-btn-primary"
-                      style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
-                      onClick={handleDemoOrDevLogin}
-                      disabled={isDemoLoggingIn || isLoading}
-                    >
-                      <Sparkles size={14} style={{ marginRight: '6px' }} />
-                      {isDemoLoggingIn ? 'Launching Demo...' : 'Explore Live Demo (1-Click)'}
-                    </button>
+                <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="landing-btn-primary"
+                    style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
+                    onClick={handleDemoOrDevLogin}
+                    disabled={isDemoLoggingIn || isLoading}
+                  >
+                    <Sparkles size={14} style={{ marginRight: '6px' }} />
+                    {isDemoLoggingIn ? 'Launching Demo...' : 'Explore Live Demo (1-Click)'}
+                  </button>
 
-                    <button
-                      type="button"
-                      className="landing-btn-secondary"
-                      style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
-                      onClick={() => setShowSetupGuide(!showSetupGuide)}
-                    >
-                      {showSetupGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      <span>{showSetupGuide ? 'Hide Coolify Setup Guide' : 'How to configure in Coolify'}</span>
-                    </button>
-                  </div>
-                )}
+                  <button
+                    type="button"
+                    className="landing-btn-secondary"
+                    style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
+                    onClick={() => setShowSetupGuide(!showSetupGuide)}
+                  >
+                    {showSetupGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    <span>{showSetupGuide ? 'Hide Callback Setup Guide' : 'View Correct Callback URL'}</span>
+                  </button>
+                </div>
 
-                {showSetupGuide && isGithubUnconfigured && (
+                {showSetupGuide && (
                   <div className="landing-setup-guide">
-                    <p style={{ fontWeight: 600, marginBottom: '6px' }}>1. GitHub App Settings (on github.com/settings/apps):</p>
-                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px' }}>Homepage URL:</div>
-                    <div className="landing-code-snippet">
-                      <span>{currentOrigin}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(currentOrigin, 'origin')}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)' }}
-                        title="Copy Homepage URL"
-                      >
-                        {copiedKey === 'origin' ? <Check size={14} color="var(--heat-cooling)" /> : <Copy size={14} />}
-                      </button>
-                    </div>
-
-                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', marginTop: '8px' }}>Authorization callback URL:</div>
+                    <p style={{ fontWeight: 600, marginBottom: '6px' }}>1. GitHub OAuth App Settings (on github.com/settings/apps):</p>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px' }}>Authorization callback URL:</div>
                     <div className="landing-code-snippet">
                       <span>{callbackUrl}</span>
                       <button
@@ -282,12 +338,23 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                       </button>
                     </div>
 
-                    <p style={{ fontWeight: 600, marginTop: '12px', marginBottom: '6px' }}>2. Environment Variables to add in Coolify:</p>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', marginTop: '8px' }}>Homepage URL:</div>
+                    <div className="landing-code-snippet">
+                      <span>{currentOrigin}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(currentOrigin, 'origin')}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)' }}
+                        title="Copy Homepage URL"
+                      >
+                        {copiedKey === 'origin' ? <Check size={14} color="var(--heat-cooling)" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+
+                    <p style={{ fontWeight: 600, marginTop: '12px', marginBottom: '6px' }}>2. Environment Variables in Coolify:</p>
                     <ul style={{ paddingLeft: '18px', margin: '4px 0', fontSize: '12px', color: 'var(--ink-2)' }}>
-                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_CLIENT_ID</strong> (Client ID of your GitHub App)</li>
-                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_CLIENT_SECRET</strong> (Client Secret generated for your GitHub App)</li>
-                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_APP_ID</strong> (Numeric GitHub App ID)</li>
-                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_PRIVATE_KEY_BASE64</strong> (Base64 encoded RSA private key)</li>
+                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_CLIENT_ID</strong> (from your registered GitHub App)</li>
+                      <li><strong style={{ color: 'var(--ink)' }}>GITHUB_CLIENT_SECRET</strong> (generated secret)</li>
                       <li><strong style={{ color: 'var(--ink)' }}>APP_URL</strong>: <code>{currentOrigin}</code></li>
                       <li><strong style={{ color: 'var(--ink)' }}>API_URL</strong>: <code>{currentOrigin}</code></li>
                     </ul>
@@ -296,36 +363,190 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               </div>
             )}
 
-            {/* Main CTA Action Buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start', width: '100%' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+            {/* Auth Tab Switcher */}
+            <div className="landing-auth-container">
+              <div className="landing-auth-tabs">
                 <button
                   type="button"
-                  className="landing-btn-primary"
-                  style={{ height: '48px', padding: '0 24px', fontSize: '15px' }}
-                  onClick={onGithubLogin}
-                  disabled={isLoading || isDemoLoggingIn}
+                  className={`landing-auth-tab ${authTab === 'github' ? 'active' : ''}`}
+                  onClick={() => setAuthTab('github')}
                 >
-                  Sign in with GitHub
-                  <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" style={{ marginLeft: '8px' }} />
+                  GitHub OAuth
                 </button>
-
                 <button
-                  id="dev-login-btn"
                   type="button"
-                  className="landing-btn-secondary"
-                  style={{ height: '48px', padding: '0 20px', fontSize: '15px' }}
-                  onClick={handleDemoOrDevLogin}
-                  disabled={isDemoLoggingIn || isLoading}
+                  className={`landing-auth-tab ${authTab === 'signup' ? 'active' : ''}`}
+                  onClick={() => setAuthTab('signup')}
                 >
-                  <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" />
-                  <span>{isDemoLoggingIn ? 'Signing in...' : 'Explore Live Demo'}</span>
+                  Create Account
+                </button>
+                <button
+                  type="button"
+                  className={`landing-auth-tab ${authTab === 'signin' ? 'active' : ''}`}
+                  onClick={() => setAuthTab('signin')}
+                >
+                  Sign In
                 </button>
               </div>
 
-              <p className="landing-hero-note">
-                Read-only access. Or test-drive all triage, ledger, and analytics features instantly in demo mode.
-              </p>
+              {/* Tab 1: GitHub Login Mode */}
+              {authTab === 'github' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start', width: '100%' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="landing-btn-primary"
+                      style={{ height: '48px', padding: '0 24px', fontSize: '15px' }}
+                      onClick={onGithubLogin}
+                      disabled={isLoading || isDemoLoggingIn}
+                    >
+                      Sign in with GitHub
+                      <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" style={{ marginLeft: '8px' }} />
+                    </button>
+
+                    <button
+                      id="dev-login-btn"
+                      type="button"
+                      className="landing-btn-secondary"
+                      style={{ height: '48px', padding: '0 20px', fontSize: '15px' }}
+                      onClick={handleDemoOrDevLogin}
+                      disabled={isDemoLoggingIn || isLoading}
+                    >
+                      <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" />
+                      <span>{isDemoLoggingIn ? 'Launching Demo...' : 'Explore Live Demo'}</span>
+                    </button>
+                  </div>
+
+                  <p className="landing-hero-note">
+                    Read-only access. Or create a direct account to manage repos via Personal Access Token.
+                  </p>
+                </div>
+              )}
+
+              {/* Tab 2: Create Account Mode */}
+              {authTab === 'signup' && (
+                <form onSubmit={handleSignupSubmit} className="landing-auth-form">
+                  <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--ink)' }}>
+                    Create your RepoPulse Account
+                  </div>
+                  {signupError && (
+                    <div className="landing-form-error">{signupError}</div>
+                  )}
+
+                  <div className="landing-auth-field">
+                    <label className="landing-auth-label">Username *</label>
+                    <input
+                      type="text"
+                      className="landing-auth-input"
+                      placeholder="e.g. alexdeveloper"
+                      value={signupLogin}
+                      onChange={(e) => setSignupLogin(e.target.value)}
+                      required
+                      minLength={2}
+                    />
+                  </div>
+
+                  <div className="landing-auth-field">
+                    <label className="landing-auth-label">Email (optional)</label>
+                    <input
+                      type="email"
+                      className="landing-auth-input"
+                      placeholder="you@company.com"
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="landing-auth-field">
+                    <label className="landing-auth-label">Password * (min 6 characters)</label>
+                    <input
+                      type="password"
+                      className="landing-auth-input"
+                      placeholder="••••••••"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="landing-btn-primary"
+                    style={{ height: '42px', marginTop: '6px' }}
+                    disabled={isSigningUp || !signupLogin.trim() || signupPassword.length < 6}
+                  >
+                    {isSigningUp ? 'Creating Account...' : 'Create Account & Enter'}
+                  </button>
+
+                  <div style={{ fontSize: '12px', color: 'var(--ink-2)', textAlign: 'center' }}>
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setAuthTab('signin')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)', textDecoration: 'underline', padding: 0, fontSize: '12px', fontWeight: 600 }}
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Tab 3: Sign In Mode */}
+              {authTab === 'signin' && (
+                <form onSubmit={handleSigninSubmit} className="landing-auth-form">
+                  <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--ink)' }}>
+                    Sign In to RepoPulse
+                  </div>
+                  {signinError && (
+                    <div className="landing-form-error">{signinError}</div>
+                  )}
+
+                  <div className="landing-auth-field">
+                    <label className="landing-auth-label">Username or Email *</label>
+                    <input
+                      type="text"
+                      className="landing-auth-input"
+                      placeholder="Username or email"
+                      value={signinIdentifier}
+                      onChange={(e) => setSigninIdentifier(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="landing-auth-field">
+                    <label className="landing-auth-label">Password *</label>
+                    <input
+                      type="password"
+                      className="landing-auth-input"
+                      placeholder="••••••••"
+                      value={signinPassword}
+                      onChange={(e) => setSigninPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="landing-btn-primary"
+                    style={{ height: '42px', marginTop: '6px' }}
+                    disabled={isSigningIn || !signinIdentifier.trim() || !signinPassword}
+                  >
+                    {isSigningIn ? 'Signing In...' : 'Sign In'}
+                  </button>
+
+                  <div style={{ fontSize: '12px', color: 'var(--ink-2)', textAlign: 'center' }}>
+                    Don't have an account yet?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setAuthTab('signup')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)', textDecoration: 'underline', padding: 0, fontSize: '12px', fontWeight: 600 }}
+                    >
+                      Create Account
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
 

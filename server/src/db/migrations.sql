@@ -14,13 +14,31 @@ $$;
 -- 1. Users Table
 CREATE TABLE IF NOT EXISTS users (
   id              BIGSERIAL PRIMARY KEY,
-  github_user_id  BIGINT UNIQUE NOT NULL,
+  github_user_id  BIGINT UNIQUE,
+  email           TEXT UNIQUE,
+  password_hash   TEXT,
+  github_token    TEXT,
   login           TEXT NOT NULL,
   name            TEXT,
   avatar_url      TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at      TIMESTAMPTZ
 );
+
+-- Backward-compatible column migration for existing databases
+DO $$
+BEGIN
+  ALTER TABLE users ALTER COLUMN github_user_id DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS github_token TEXT;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- 2. Sessions Table (Stores SHA-256 hash of random session token)
 CREATE TABLE IF NOT EXISTS sessions (

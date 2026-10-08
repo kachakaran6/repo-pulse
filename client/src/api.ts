@@ -150,6 +150,69 @@ export function loginWithGithub(): void {
   window.location.href = '/auth/github/start';
 }
 
+export async function registerUser(params: {
+  login: string;
+  email?: string;
+  password: string;
+  name?: string;
+}): Promise<{ ok: boolean; user: UserProfile }> {
+  const res = await fetch(`/auth/register`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Registration failed');
+  }
+  return res.json();
+}
+
+export async function loginWithPassword(params: {
+  loginOrEmail: string;
+  password: string;
+}): Promise<{ ok: boolean; user: UserProfile }> {
+  const res = await fetch(`/auth/login`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Login failed');
+  }
+  return res.json();
+}
+
+export async function connectGitHubToken(token: string): Promise<{ ok: boolean; message: string; github_user: any }> {
+  const res = await fetch(`/auth/connect-token`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to connect GitHub token');
+  }
+  return res.json();
+}
+
+export async function disconnectGitHub(): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`/auth/disconnect-github`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to disconnect GitHub');
+  }
+  return res.json();
+}
+
 export async function loginDemoUser(): Promise<{ ok: boolean; user: UserProfile }> {
   const res = await fetch(`/auth/demo-login`, {
     method: 'POST',
