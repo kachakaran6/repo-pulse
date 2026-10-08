@@ -20,6 +20,9 @@ export const authPool = new pg.Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
+authPool.on('error', (err) => {
+  logger.error({ error: err.message }, 'Unexpected error on idle auth database client');
+});
 
 /**
  * Tenant PostgreSQL Connection Pool (Uses RLS with app.user_id)
@@ -29,6 +32,9 @@ export const pool = new pg.Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+});
+pool.on('error', (err) => {
+  logger.error({ error: err.message }, 'Unexpected error on idle tenant database client');
 });
 
 /**

@@ -6,8 +6,8 @@ import { logger } from './utils/logger.js';
 async function start() {
   await initDb();
 
-  const server = app.listen(env.PORT, () => {
-    logger.info(`RepoPulse v2 API listening on port ${env.PORT} in ${env.NODE_ENV} mode`);
+  const server = app.listen(env.PORT, '0.0.0.0', () => {
+    logger.info(`RepoPulse v2 API listening on 0.0.0.0:${env.PORT} in ${env.NODE_ENV} mode`);
     logger.info(`Health check available at http://localhost:${env.PORT}/healthz`);
   });
 
