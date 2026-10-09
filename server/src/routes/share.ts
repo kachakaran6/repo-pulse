@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
 import { db } from '../db/index.js';
 import { computeUnifiedStats, computeAchievements } from '../core/stats.js';
-import { DEFAULT_THRESHOLDS } from '../core/status.js';
+import { statusOf, DEFAULT_THRESHOLDS } from '../core/status.js';
 
 export const shareRouter = Router();
+
 
 const snapshotConfigSchema = z.object({
   template: z.enum(['summary', 'streak', 'heat_strip', 'language_mix', 'achievements', 'triage_progress']),
@@ -50,6 +51,7 @@ shareRouter.post('/api/snapshots', requireAuth, async (req, res) => {
   const achievements = computeAchievements(stats);
 
   // Sanitize repo names according to privacy settings
+  const now = Date.now();
   const sanitizedRepos = rawRepos.map((r) => {
     let name = r.full_name;
     if (config.hideAllRepoNames) {
@@ -58,12 +60,14 @@ shareRouter.post('/api/snapshots', requireAuth, async (req, res) => {
       name = 'Private repo';
     }
 
+    const repoStatus = (r as any).status || statusOf(r.last_commit_at, now, DEFAULT_THRESHOLDS);
+
     return {
       name,
       is_private: r.is_private,
-      status: r.status || 'active',
+      status: repoStatus,
       language: r.language,
-      commits_30d: (r.activity || []).slice(-30).reduce((s, a: any) => s + (a.commits_mine || a.commits || 0), 0),
+      commits_30d: (r.activity || []).slice(-30).reduce((s: number, a: any) => s + (a.commits_mine || a.commits || 0), 0),
     };
   });
 
@@ -132,8 +136,8 @@ shareRouter.get('/api/snapshots', requireAuth, async (req, res) => {
  */
 shareRouter.delete('/api/snapshots/:slug', requireAuth, async (req, res) => {
   const userId = req.user!.id;
-  const slug = req.params.slug;
-  const revoked = await db.revokeSnapshot(slug, userId);
+  const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+  const revoked = await db.revokeSnapshot(slug as string, userId);
   if (!revoked) {
     res.status(404).json({ error: 'Snapshot not found or already revoked' });
     return;
@@ -141,6 +145,7 @@ shareRouter.delete('/api/snapshots/:slug', requireAuth, async (req, res) => {
   await db.logAudit(userId, 'snapshot_revoked', { slug });
   res.json({ ok: true, message: 'Card revoked successfully' });
 });
+
 
 /**
  * Helper to render SVG Card based on selected template
@@ -361,8 +366,8 @@ export function renderCardSvg(snapshot: any): string {
  * Public server-rendered share page with Open Graph and Twitter Card tags
  */
 shareRouter.get('/s/:slug', async (req, res) => {
-  const slug = req.params.slug;
-  const snapshot = await db.getSnapshotBySlug(slug);
+  const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+  const snapshot = await db.getSnapshotBySlug(slug as string);
 
   if (!snapshot || snapshot.revoked_at) {
     res.status(404).send(`
@@ -484,8 +489,9 @@ shareRouter.get('/s/:slug', async (req, res) => {
  * Dynamic Open Graph SVG/PNG image rendering
  */
 shareRouter.get('/s/:slug/og.png', async (req, res) => {
-  const slug = req.params.slug;
-  const snapshot = await db.getSnapshotBySlug(slug);
+  const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+  const snapshot = await db.getSnapshotBySlug(slug as string);
+
 
   if (!snapshot || snapshot.revoked_at) {
     res.status(404).send('Not Found');

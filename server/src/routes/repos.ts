@@ -168,14 +168,14 @@ reposRouter.get('/', async (req, res) => {
     });
   } else if (sort === 'commits_30d') {
     enrichedRepos.sort((a, b) => {
-      const aCommits = a.activity.slice(-30).reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
-      const bCommits = b.activity.slice(-30).reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
+      const aCommits = a.activity.slice(-30).reduce((s: number, x: any) => s + (x.commits_mine || x.commits || 0), 0);
+      const bCommits = b.activity.slice(-30).reduce((s: number, x: any) => s + (x.commits_mine || x.commits || 0), 0);
       return bCommits - aCommits;
     });
   } else if (sort === 'commits_90d') {
     enrichedRepos.sort((a, b) => {
-      const aCommits = a.activity.reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
-      const bCommits = b.activity.reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
+      const aCommits = a.activity.reduce((s: number, x: any) => s + (x.commits_mine || x.commits || 0), 0);
+      const bCommits = b.activity.reduce((s: number, x: any) => s + (x.commits_mine || x.commits || 0), 0);
       return bCommits - aCommits;
     });
   } else if (sort === 'name') {
@@ -223,11 +223,17 @@ reposRouter.get('/facets', async (req, res) => {
   const rawRepos = await db.getUserRepos(userId);
   const now = Date.now();
 
-  const facetCounts = {
+  const facetCounts: {
+    status: { active: number; cooling: number; stale: number; dead: number };
+    relationship: { owner: number; organization: number; collaborator: number; fork: number };
+    visibility: { public: number; private: number };
+    languages: Record<string, number>;
+    decision: Record<string, number>;
+  } = {
     status: { active: 0, cooling: 0, stale: 0, dead: 0 },
     relationship: { owner: 0, organization: 0, collaborator: 0, fork: 0 },
     visibility: { public: 0, private: 0 },
-    languages: {} as Record<string, number>,
+    languages: {},
     decision: { undecided: 0, keep: 0, pause: 0, retire: 0 },
   };
 
@@ -248,12 +254,16 @@ reposRouter.get('/facets', async (req, res) => {
     }
 
     const dec = r.meta?.decision;
-    if (!dec) facetCounts.decision.undecided++;
-    else if (facetCounts.decision[dec] !== undefined) facetCounts.decision[dec]++;
+    if (!dec) {
+      facetCounts.decision.undecided = (facetCounts.decision.undecided || 0) + 1;
+    } else {
+      facetCounts.decision[dec] = (facetCounts.decision[dec] || 0) + 1;
+    }
   }
 
   res.json(facetCounts);
 });
+
 
 /**
  * GET /api/installations
