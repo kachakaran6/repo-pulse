@@ -107,22 +107,19 @@ authRouter.get('/github/callback', async (req, res) => {
     const profile = await exchangeCodeForUser(code);
     const user = await findOrCreateUser(profile);
 
+    if (profile.accessToken) {
+      await db.linkTokenToUser(user.id, profile.accessToken, {
+        github_user_id: profile.id,
+        login: profile.login,
+        avatar_url: profile.avatar_url,
+      });
+    }
+
     await createSession(user.id, req, res);
     await db.logAudit(user.id, 'user_logged_in', { method: 'github_oauth' });
 
-    // Check if user has an active GitHub App installation
-    const installation = await db.getInstallation(user.id);
-    if (!installation && env.GITHUB_APP_SLUG) {
-      // Direct user to install the GitHub App to choose repos
-      res.redirect(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
-      return;
-    }
-
-    // Trigger initial sync if first time
-    const repos = await db.getUserRepos(user.id);
-    if (repos.length === 0) {
-      runUserSync(user.id).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
-    }
+    // Trigger initial repository sync with user's GitHub account
+    runUserSync(user.id).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
 
     res.redirect('/');
   } catch (err: any) {

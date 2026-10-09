@@ -18,7 +18,7 @@ const envSchema = z.object({
     z.boolean()
   ).default(true),
   GITHUB_APP_ID: z.string().optional(),
-  GITHUB_APP_SLUG: z.string().default('repopulse-app'),
+  GITHUB_APP_SLUG: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
   GITHUB_PRIVATE_KEY_BASE64: z.string().optional(),

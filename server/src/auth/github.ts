@@ -53,6 +53,7 @@ export interface GitHubUserProfile {
   login: string;
   name: string | null;
   avatar_url: string;
+  accessToken?: string;
 }
 
 /**
@@ -85,7 +86,7 @@ export async function exchangeCodeForUser(code: string): Promise<GitHubUserProfi
     throw new Error(`GitHub token exchange failed: ${tokenData.error_description || tokenData.error || 'unknown error'}`);
   }
 
-  // Fetch authenticated user profile using short-lived user token
+  // Fetch authenticated user profile using user token
   const userRes = await fetch('https://api.github.com/user', {
     headers: {
       'Authorization': `Bearer ${tokenData.access_token}`,
@@ -100,12 +101,12 @@ export async function exchangeCodeForUser(code: string): Promise<GitHubUserProfi
 
   const profile = (await userRes.json()) as any;
 
-  // Crucial security rule: we NEVER log, store or return the user's access token!
   return {
     id: String(profile.id),
     login: profile.login,
     name: profile.name || profile.login,
     avatar_url: profile.avatar_url,
+    accessToken: tokenData.access_token,
   };
 }
 

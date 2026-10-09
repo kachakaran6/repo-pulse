@@ -169,7 +169,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
             const lastCommitDate = node?.defaultBranchRef?.target?.history?.nodes?.[0]?.committedDate || null;
             const repo = await db.upsertRepo({
               user_id: userId,
-              installation_id: installation.id,
+              installation_id: installation?.id || null,
               github_repo_id: String(node.databaseId),
               full_name: node.nameWithOwner,
               is_private: Boolean(node.isPrivate),
