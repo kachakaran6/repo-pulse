@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.js';
 import { reposRouter } from './routes/repos.js';
 import { syncRouter } from './routes/sync.js';
 import { settingsRouter } from './routes/settings.js';
+import { shareRouter } from './routes/share.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { logger } from './utils/logger.js';
 
@@ -106,11 +107,17 @@ app.use('/api', apiRateLimiter);
 app.use('/api/repos', reposRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api', settingsRouter);
+app.use(shareRouter);
 
 // Fallback for SPA routing if public directory exists
 if (fs.existsSync(publicDir)) {
   app.get('*', (_req, res, next) => {
-    if (_req.path.startsWith('/api') || _req.path.startsWith('/auth') || _req.path.startsWith('/webhooks')) {
+    if (
+      _req.path.startsWith('/api') ||
+      _req.path.startsWith('/auth') ||
+      _req.path.startsWith('/webhooks') ||
+      _req.path.startsWith('/s/')
+    ) {
       return next();
     }
     res.sendFile(path.join(publicDir, 'index.html'));

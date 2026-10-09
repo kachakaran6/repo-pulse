@@ -18,6 +18,7 @@ import { SettingsView } from './components/SettingsView.js';
 import { RepoDetailModal } from './components/RepoDetailModal.js';
 import { LandingPage } from './components/LandingPage.js';
 import { WelcomeView } from './components/WelcomeView.js';
+import { ShareView } from './components/ShareView.js';
 import { SkeletonRow, Toast, ErrorBanner } from './components/FeedbackComponents.js';
 
 interface UndoAction {
@@ -39,10 +40,14 @@ export const App: React.FC = () => {
   const [summarySentence, setSummarySentence] = useState<string>('');
   const [stats, setStats] = useState<SummaryStats | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'triage' | 'archive' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'triage' | 'archive' | 'settings' | 'share'>(() => {
+    if (window.location.pathname === '/share') return 'share';
+    return 'overview';
+  });
   const [selectedRepoForDetail, setSelectedRepoForDetail] = useState<Repository | null>(null);
   const [isWelcomeRoute, setIsWelcomeRoute] = useState<boolean>(() => window.location.pathname === '/welcome');
   const [devEnabled, setDevEnabled] = useState<boolean>(false);
+
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -376,6 +381,15 @@ export const App: React.FC = () => {
 
       {activeTab === 'analytics' && (
         <AnalyticsView />
+      )}
+
+      {activeTab === 'share' && user && (
+        <ShareView
+          user={user}
+          repos={repos}
+          stats={stats}
+          summarySentence={summarySentence}
+        />
       )}
 
       {activeTab === 'triage' && (

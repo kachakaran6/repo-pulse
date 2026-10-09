@@ -306,3 +306,61 @@ export function computeUnifiedStats(
     weeklyVelocity,
   };
 }
+
+export interface AchievementBadge {
+  id: string;
+  name: string;
+  description: string;
+  earned: boolean;
+  icon: string;
+}
+
+/**
+ * Computes rule-based achievements from unified stats
+ */
+export function computeAchievements(stats: UnifiedStats): AchievementBadge[] {
+  return [
+    {
+      id: 'streak_7',
+      name: '7-Day Momentum',
+      description: 'Maintained a 7-day daily commit streak',
+      earned: stats.longestStreak >= 7,
+      icon: 'Flame',
+    },
+    {
+      id: 'streak_30',
+      name: 'Iron Habit',
+      description: 'Maintained a 30-day continuous streak',
+      earned: stats.longestStreak >= 30,
+      icon: 'Calendar',
+    },
+    {
+      id: 'century_commits',
+      name: 'Century Velocity',
+      description: 'Authored 100+ commits in the last 30 days',
+      earned: stats.totalCommits30d >= 100,
+      icon: 'GitCommit',
+    },
+    {
+      id: 'revived_trio',
+      name: 'Necromancer',
+      description: 'Revived 3 stale or cooling repositories',
+      earned: stats.revivedReposCount >= 3,
+      icon: 'RotateCcw',
+    },
+    {
+      id: 'triage_master',
+      name: 'Inbox Zero',
+      description: 'Decided on every cooling and stale repository',
+      earned: (stats.coolingCount + stats.staleCount === 0) && stats.totalRepos > 0,
+      icon: 'CheckCircle2',
+    },
+    {
+      id: 'poly_shipper',
+      name: 'Poly Shipper',
+      description: 'Committed to 5+ distinct repositories in a single week',
+      earned: stats.committedReposThisWeek >= 5,
+      icon: 'GitFork',
+    },
+  ];
+}

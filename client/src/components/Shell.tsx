@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import type { UserProfile, SummaryStats, SyncStatus } from '../types.js';
 
 interface ShellProps {
-  activeTab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings';
-  onSelectTab: (tab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings') => void;
+  activeTab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings' | 'share';
+  onSelectTab: (tab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings' | 'share') => void;
   user: UserProfile | null;
   stats: SummaryStats | null;
   lastSync: SyncStatus | null;
@@ -13,6 +13,7 @@ interface ShellProps {
   onSignOutAll: () => Promise<void>;
   children: React.ReactNode;
 }
+
 
 function formatRelativeSyncTime(dateStr?: string | null): string {
   if (!dateStr) return 'Not synced yet';
@@ -83,6 +84,14 @@ export const Shell: React.FC<ShellProps> = ({
                   onClick={() => onSelectTab('analytics')}
                 >
                   Analytics
+                </button>
+                <button
+                  id="tab-share"
+                  type="button"
+                  className={`nav-tab ${activeTab === 'share' ? 'active' : ''}`}
+                  onClick={() => onSelectTab('share')}
+                >
+                  Share cards
                 </button>
                 <button
                   id="tab-triage"

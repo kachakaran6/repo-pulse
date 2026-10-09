@@ -190,3 +190,40 @@ export async function deleteAccount(): Promise<void> {
     throw new Error('Failed to delete account');
   }
 }
+
+export async function createSnapshot(config: any): Promise<{ ok: boolean; slug: string; url: string; snapshot: any }> {
+  const res = await fetch(`${API_BASE}/snapshots`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create share card');
+  }
+  return res.json();
+}
+
+export async function fetchSnapshots(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/snapshots`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error('Failed to fetch snapshots');
+  }
+  return res.json();
+}
+
+export async function revokeSnapshot(slug: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/snapshots/${slug}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error('Failed to revoke share card');
+  }
+}
+
