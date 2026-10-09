@@ -404,7 +404,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'analytics' && (
-        <AnalyticsView />
+        <AnalyticsView onNavigateShare={() => setActiveTab('share')} />
       )}
 
       {activeTab === 'share' && user && (
