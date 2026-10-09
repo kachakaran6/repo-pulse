@@ -147,6 +147,16 @@ shareRouter.delete('/api/snapshots/:slug', requireAuth, async (req, res) => {
 });
 
 
+function escapeXml(unsafe: string): string {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Helper to render SVG Card based on selected template and responsive dimensions
  */
@@ -165,8 +175,11 @@ export function renderCardSvg(snapshot: any): string {
   const borderColor = isHeatAccent ? '#F2664F' : (isDark ? '#2E302D' : '#DADDDA');
   const accentColor = isHeatAccent ? '#F2664F' : '#D2382A';
 
-  const title = config.title || `${data.user?.login ? `@${data.user.login}'s ` : ''}RepoPulse`;
-  const subtitle = config.subtitle || data.stats?.summarySentence || 'Active repository momentum and commit health';
+  const rawTitle = config.title || `${data.user?.login ? `@${data.user.login}'s ` : ''}RepoPulse`;
+  const rawSubtitle = config.subtitle || data.stats?.summarySentence || 'Active repository momentum and commit health';
+  const title = escapeXml(rawTitle);
+  const subtitle = escapeXml(rawSubtitle);
+
   const stats = data.stats || {};
   const template = config.template || 'summary';
   const period = config.period || '30d';
@@ -189,7 +202,8 @@ export function renderCardSvg(snapshot: any): string {
   const pad = 40;
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
-  const contentW = innerW - 80;
+  const contentX = pad + 44;
+  const contentW = innerW - 88;
 
   let templateContent = '';
 
@@ -212,16 +226,16 @@ export function renderCardSvg(snapshot: any): string {
       const y = row * 120;
       return `
         <rect x="${x}" y="${y}" width="${colW}" height="100" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
-        <text x="${x + 20}" y="${y + 48}" class="stat-val">${item.val}</text>
-        <text x="${x + 20}" y="${y + 78}" class="stat-label">${item.label}</text>
+        <text x="${x + 20}" y="${y + 48}" class="stat-val">${escapeXml(item.val)}</text>
+        <text x="${x + 20}" y="${y + 78}" class="stat-label">${escapeXml(item.label)}</text>
       `;
     }).join('');
 
-    const barY = Math.ceil(statItems.length / colCount) * 120 + 20;
+    const barY = Math.ceil(statItems.length / colCount) * 120 + 24;
 
     templateContent = `
       <!-- Stat Blocks -->
-      <g transform="translate(80, 160)">
+      <g transform="translate(${contentX}, ${pad + 140})">
         ${boxesSvg}
 
         <!-- Heat Status Bar -->
@@ -253,7 +267,7 @@ export function renderCardSvg(snapshot: any): string {
     const colW = (contentW - (colCount - 1) * colGap) / colCount;
 
     templateContent = `
-      <g transform="translate(80, 160)">
+      <g transform="translate(${contentX}, ${pad + 140})">
         <rect x="0" y="0" width="${colW}" height="200" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
         <text x="24" y="65" class="hero-val">${stats.longestStreak || 0}</text>
         <text x="24" y="100" class="hero-unit">DAYS</text>
@@ -263,8 +277,8 @@ export function renderCardSvg(snapshot: any): string {
         <rect x="${colW + colGap}" y="0" width="${colW}" height="200" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
         <text x="${colW + colGap + 24}" y="65" class="hero-val">${periodCommits}</text>
         <text x="${colW + colGap + 24}" y="100" class="hero-unit">COMMITS</text>
-        <text x="${colW + colGap + 24}" y="135" class="stat-label">${periodLabel}</text>
-        <text x="${colW + colGap + 24}" y="165" class="stat-sub">Peak day: ${stats.mostActiveWeekday || 'Monday'}</text>
+        <text x="${colW + colGap + 24}" y="135" class="stat-label">${escapeXml(periodLabel)}</text>
+        <text x="${colW + colGap + 24}" y="165" class="stat-sub">Peak day: ${escapeXml(stats.mostActiveWeekday || 'Monday')}</text>
 
         ${colCount > 2 ? `
           <rect x="${(colW + colGap) * 2}" y="0" width="${colW}" height="200" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
@@ -285,8 +299,8 @@ export function renderCardSvg(snapshot: any): string {
       return `
         <g transform="translate(0, ${y})">
           <circle cx="8" cy="14" r="4" fill="${statusColor}" />
-          <text x="24" y="18" class="repo-name">${r.name}</text>
-          <text x="${barStart - 90}" y="18" class="repo-meta">${r.language || 'Plain Text'}</text>
+          <text x="24" y="18" class="repo-name">${escapeXml(r.name)}</text>
+          <text x="${barStart - 90}" y="18" class="repo-meta">${escapeXml(r.language || 'Plain Text')}</text>
           <rect x="${barStart}" y="6" width="${barW}" height="16" rx="2" fill="${borderColor}" />
           <rect x="${barStart}" y="6" width="${Math.min(barW, Math.max(8, (r.commits_30d || 1) * 12))}" height="16" rx="2" fill="${statusColor}" />
           <text x="${barStart + barW + 16}" y="18" class="repo-meta">${r.commits_30d || 0} commits</text>
@@ -295,7 +309,7 @@ export function renderCardSvg(snapshot: any): string {
     }).join('');
 
     templateContent = `
-      <g transform="translate(80, 160)">
+      <g transform="translate(${contentX}, ${pad + 140})">
         <text x="0" y="-12" class="section-label">ACTIVE REPOSITORY LEDGER</text>
         ${rowsSvg || `<text x="0" y="30" class="subtext">No repositories to display.</text>`}
       </g>
@@ -308,7 +322,7 @@ export function renderCardSvg(snapshot: any): string {
       const barW = Math.max(120, contentW - nameW - 140);
       return `
         <g transform="translate(0, ${y})">
-          <text x="0" y="18" class="repo-name">${l.name}</text>
+          <text x="0" y="18" class="repo-name">${escapeXml(l.name)}</text>
           <rect x="${nameW}" y="6" width="${barW}" height="14" rx="2" fill="${borderColor}" />
           <rect x="${nameW}" y="6" width="${Math.max(4, (l.percentage / 100) * barW)}" height="14" rx="2" fill="${accentColor}" />
           <text x="${nameW + barW + 20}" y="18" class="repo-meta">${l.percentage}% (${l.count} repos)</text>
@@ -317,7 +331,7 @@ export function renderCardSvg(snapshot: any): string {
     }).join('');
 
     templateContent = `
-      <g transform="translate(80, 160)">
+      <g transform="translate(${contentX}, ${pad + 140})">
         <text x="0" y="-12" class="section-label">LANGUAGE DISTRIBUTION</text>
         ${langRows || `<text x="0" y="30" class="subtext">No language data recorded yet.</text>`}
       </g>
@@ -341,15 +355,15 @@ export function renderCardSvg(snapshot: any): string {
         <g transform="translate(${x}, ${y})">
           <rect x="0" y="0" width="${badgeW}" height="90" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
           <circle cx="36" cy="45" r="18" fill="${accentColor}" fill-opacity="0.15" />
-          <text x="36" y="51" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="${accentColor}">✓</text>
-          <text x="68" y="38" class="badge-title">${b.name}</text>
-          <text x="68" y="58" class="badge-desc">${b.description}</text>
+          <path d="M29 45 L34 50 L43 41" fill="none" stroke="${accentColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <text x="68" y="38" class="badge-title">${escapeXml(b.name)}</text>
+          <text x="68" y="58" class="badge-desc">${escapeXml(b.description)}</text>
         </g>
       `;
     }).join('');
 
     templateContent = `
-      <g transform="translate(80, 160)">
+      <g transform="translate(${contentX}, ${pad + 140})">
         <text x="0" y="-12" class="section-label">EARNED MILESTONES & ACHIEVEMENTS</text>
         ${badgeSvg}
       </g>
@@ -357,7 +371,7 @@ export function renderCardSvg(snapshot: any): string {
   } else if (template === 'triage_progress') {
     const boxW = (contentW - 20) / 2;
     templateContent = `
-      <g transform="translate(80, 160)">
+      <g transform="translate(${contentX}, ${pad + 140})">
         <rect x="0" y="0" width="${boxW}" height="190" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
         <text x="28" y="45" class="stat-label">REPOSITORIES IN ACTIVE RETENTION</text>
         <text x="28" y="105" class="hero-val">${stats.activeCount || 0}</text>
@@ -374,39 +388,56 @@ export function renderCardSvg(snapshot: any): string {
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 28px; font-weight: 700; fill: ${textColor}; }
-        .subtext { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; fill: ${subtextColor}; }
-        .section-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; fill: ${subtextColor}; }
-        .stat-val { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 32px; font-weight: 700; fill: ${textColor}; }
-        .stat-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 500; fill: ${subtextColor}; }
-        .stat-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: ${subtextColor}; }
-        .hero-val { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 52px; font-weight: 700; fill: ${textColor}; }
-        .hero-unit { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; fill: ${subtextColor}; }
-        .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: ${textColor}; }
-        .repo-name { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; fill: ${textColor}; }
-        .repo-meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: ${subtextColor}; }
-        .badge-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; fill: ${textColor}; }
-        .badge-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: ${subtextColor}; }
+        .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; fill: ${textColor}; }
+        .subtext { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; fill: ${subtextColor}; }
+        .section-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; fill: ${subtextColor}; }
+        .stat-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 700; fill: ${textColor}; }
+        .stat-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; fill: ${subtextColor}; }
+        .stat-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: ${subtextColor}; }
+        .hero-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 52px; font-weight: 700; fill: ${textColor}; }
+        .hero-unit { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; fill: ${subtextColor}; }
+        .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 500; fill: ${textColor}; }
+        .repo-name { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 14px; font-weight: 600; fill: ${textColor}; }
+        .repo-meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: ${subtextColor}; }
+        .badge-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; fill: ${textColor}; }
+        .badge-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: ${subtextColor}; }
       </style>
       <rect width="${width}" height="${height}" fill="${bgColor}" />
       
       <!-- Card Outer Border & Surface -->
       <rect x="${pad}" y="${pad}" width="${innerW}" height="${innerH}" rx="8" fill="${surfaceColor}" stroke="${borderColor}" stroke-width="1" />
       
-      <!-- Header Area -->
-      <g transform="translate(80, 85)">
-        <text x="0" y="0" class="title">${title}</text>
-        <text x="0" y="26" class="subtext">${subtitle}</text>
+      <!-- Header Area (Properly spaced baseline to avoid clipping) -->
+      <g transform="translate(${contentX}, ${pad + 44})">
+        <text x="0" y="32" class="title">${title}</text>
+        <text x="0" y="66" class="subtext">${subtitle}</text>
       </g>
 
       <!-- Template Body -->
       ${templateContent}
 
       <!-- Watermark Footer -->
-      ${config.watermark ? `<text x="${width - pad - 30}" y="${height - pad - 24}" text-anchor="end" class="subtext" style="font-size: 12px;">Made with RepoPulse</text>` : ''}
+      ${config.watermark ? `<text x="${width - pad - 44}" y="${height - pad - 28}" text-anchor="end" class="subtext" style="font-size: 13px; font-weight: 500;">Made with RepoPulse</text>` : ''}
     </svg>
   `;
 }
+
+/**
+ * GET /s/:slug/card.svg
+ * Direct download endpoint for SVG card
+ */
+shareRouter.get('/s/:slug/card.svg', async (req, res) => {
+  const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+  const snapshot = await db.getSnapshotBySlug(slug as string);
+  if (!snapshot || snapshot.revoked_at) {
+    res.status(404).send('Not Found');
+    return;
+  }
+  const svg = renderCardSvg(snapshot);
+  res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="repopulse-${slug}.svg"`);
+  res.send(svg);
+});
 
 /**
  * GET /s/:slug
@@ -443,6 +474,8 @@ shareRouter.get('/s/:slug', async (req, res) => {
   }
 
   const svgContent = renderCardSvg(snapshot);
+  const title = escapeXml(snapshot.title || 'Developer Portfolio');
+  const summary = escapeXml(snapshot.data?.stats?.summarySentence || 'Track repository momentum and commit velocity');
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`
@@ -451,81 +484,270 @@ shareRouter.get('/s/:slug', async (req, res) => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>${snapshot.title || 'Developer Portfolio'} · RepoPulse</title>
-      <meta name="description" content="${snapshot.data?.stats?.summarySentence || 'Track repository momentum and commit velocity'}">
+      <title>${title} · RepoPulse</title>
+      <meta name="description" content="${summary}">
       <meta name="robots" content="noindex, nofollow">
 
       <!-- Open Graph / Twitter Cards -->
       <meta property="og:type" content="website">
-      <meta property="og:title" content="${snapshot.title || 'Developer Portfolio'} · RepoPulse">
-      <meta property="og:description" content="${snapshot.data?.stats?.summarySentence || 'Track repository momentum and commit velocity'}">
+      <meta property="og:title" content="${title} · RepoPulse">
+      <meta property="og:description" content="${summary}">
       <meta property="og:image" content="/s/${slug}/og.png">
       <meta name="twitter:card" content="summary_large_image">
-      <meta name="twitter:title" content="${snapshot.title || 'Developer Portfolio'} · RepoPulse">
-      <meta name="twitter:description" content="${snapshot.data?.stats?.summarySentence || 'Track repository momentum and commit velocity'}">
+      <meta name="twitter:title" content="${title} · RepoPulse">
+      <meta name="twitter:description" content="${summary}">
       <meta name="twitter:image" content="/s/${slug}/og.png">
 
       <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
           background-color: #131413;
           color: #EDEEEA;
-          margin: 0;
-          padding: 40px 20px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
           min-height: 100vh;
-          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
         }
-        .container {
-          max-width: 900px;
-          width: 100%;
+        .header {
+          border-bottom: 1px solid #2E302D;
+          background-color: #131413;
+          height: 60px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 24px;
+        }
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: 700;
+          font-size: 16px;
+          color: #EDEEEA;
+          text-decoration: none;
+        }
+        .brand-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background-color: #D2382A;
+        }
+        .btn-header {
+          padding: 8px 16px;
+          background-color: #EDEEEA;
+          color: #14181B;
+          border-radius: 4px;
+          font-size: 13px;
+          font-weight: 600;
+          text-decoration: none;
+          transition: opacity 0.15s ease;
+        }
+        .btn-header:hover { opacity: 0.9; }
+
+        .main {
+          flex: 1;
           display: flex;
           flex-direction: column;
           align-items: center;
-        }
-        .card-wrapper {
+          justify-content: center;
+          padding: 40px 20px 60px 20px;
+          max-width: 1040px;
+          margin: 0 auto;
           width: 100%;
-          border: 1px solid #2E302D;
-          border-radius: 8px;
-          overflow: hidden;
-          background-color: #1C1D1B;
-          margin-bottom: 24px;
         }
-        .card-wrapper svg {
+
+        .card-frame {
+          width: 100%;
+          max-width: 960px;
+          border: 1px solid #2E302D;
+          border-radius: 10px;
+          overflow: hidden;
+          background-color: #131413;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+          margin-bottom: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .card-frame svg {
           width: 100%;
           height: auto;
           display: block;
         }
-        .cta-band {
+
+        .toolbar {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+          margin-bottom: 48px;
+        }
+        .btn-action {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 9px 18px;
+          background-color: #1C1D1B;
+          color: #EDEEEA;
+          border: 1px solid #2E302D;
+          border-radius: 4px;
+          font-size: 13px;
+          font-weight: 500;
+          text-decoration: none;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .btn-action:hover {
+          border-color: #EDEEEA;
+          background-color: #282926;
+        }
+
+        .footer-cta {
+          border-top: 1px solid #2E302D;
+          padding-top: 36px;
           text-align: center;
+          max-width: 600px;
+          width: 100%;
+        }
+        .footer-cta h3 {
+          font-size: 20px;
+          font-weight: 700;
+          margin-bottom: 8px;
+          color: #EDEEEA;
+        }
+        .footer-cta p {
           font-size: 14px;
           color: #A2A8A4;
+          line-height: 1.5;
+          margin-bottom: 20px;
         }
-        .cta-btn {
+        .btn-cta-big {
           display: inline-block;
-          margin-top: 12px;
-          background-color: #EDEEEA;
+          padding: 11px 26px;
+          background-color: #D2382A;
+          color: #FFFFFF;
+          border-radius: 4px;
+          font-size: 14px;
+          font-weight: 600;
+          text-decoration: none;
+          transition: background-color 0.15s ease;
+        }
+        .btn-cta-big:hover {
+          background-color: #E24838;
+        }
+        .toast {
+          position: fixed;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #EDEEEA;
           color: #14181B;
           padding: 10px 20px;
           border-radius: 4px;
           font-size: 13px;
           font-weight: 600;
-          text-decoration: none;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          pointer-events: none;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
+        .toast.show { opacity: 1; }
       </style>
     </head>
     <body>
-      <div class="container">
-        <div class="card-wrapper">
+      <div class="header">
+        <a href="/" class="brand">
+          <span class="brand-dot"></span>
+          RepoPulse
+        </a>
+        <a href="/" class="btn-header">Track your own repos with RepoPulse</a>
+      </div>
+
+      <div class="main">
+        <div class="card-frame">
           ${svgContent}
         </div>
-        <div class="cta-band">
-          <div>Want to see which of your repositories are still alive?</div>
-          <a href="/" class="cta-btn">Track your own repos with RepoPulse</a>
+
+        <div class="toolbar">
+          <button class="btn-action" onclick="copyLink()">
+            📋 Copy share link
+          </button>
+          <a href="/s/${slug}/card.svg" download="repopulse-${slug}.svg" class="btn-action">
+            ⬇️ Download SVG
+          </a>
+          <button class="btn-action" onclick="downloadPngClient()">
+            🖼️ Download PNG
+          </button>
+          <a href="https://twitter.com/intent/tweet?text=${encodeURIComponent('Tracked my repository health with RepoPulse:')}&url=${encodeURIComponent(`${req.protocol}://${req.get('host')}/s/${slug}`)}" target="_blank" rel="noopener" class="btn-action">
+            Share on X
+          </a>
+          <a href="https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${req.protocol}://${req.get('host')}/s/${slug}`)}" target="_blank" rel="noopener" class="btn-action">
+            LinkedIn
+          </a>
+        </div>
+
+        <div class="footer-cta">
+          <h3>Want to see which of your repositories are still alive?</h3>
+          <p>RepoPulse continuously verifies commit velocity and health status across all your personal and team repositories.</p>
+          <a href="/" class="btn-cta-big">Get started with GitHub</a>
         </div>
       </div>
+
+      <div id="toast" class="toast">Link copied to clipboard!</div>
+
+      <script>
+        function copyLink() {
+          navigator.clipboard.writeText(window.location.href).then(() => {
+            const t = document.getElementById('toast');
+            t.textContent = 'Link copied to clipboard!';
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+          });
+        }
+
+        function downloadPngClient() {
+          const svgElem = document.querySelector('.card-frame svg');
+          if (!svgElem) return;
+          const svgStr = new XMLSerializer().serializeToString(svgElem);
+          const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = function() {
+            try {
+              const canvas = document.createElement('canvas');
+              const w = parseInt(svgElem.getAttribute('width')) || 1200;
+              const h = parseInt(svgElem.getAttribute('height')) || 630;
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0, w, h);
+                canvas.toBlob(function(blob) {
+                  if (blob) {
+                    const pngUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = pngUrl;
+                    a.download = 'repopulse-${slug}.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
+                  }
+                }, 'image/png');
+              }
+              URL.revokeObjectURL(url);
+            } catch (e) {
+              console.error('PNG error', e);
+              URL.revokeObjectURL(url);
+            }
+          };
+          img.onerror = function() {
+            console.error('Image load error');
+            URL.revokeObjectURL(url);
+          };
+          img.src = url;
+        }
+      </script>
     </body>
     </html>
   `);
@@ -539,14 +761,13 @@ shareRouter.get('/s/:slug/og.png', async (req, res) => {
   const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
   const snapshot = await db.getSnapshotBySlug(slug as string);
 
-
   if (!snapshot || snapshot.revoked_at) {
     res.status(404).send('Not Found');
     return;
   }
 
   const svg = renderCardSvg(snapshot);
-  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=86400');
   res.send(svg);
 });

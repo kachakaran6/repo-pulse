@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Repository, UserProfile, SummaryStats } from '../types.js';
 import * as api from '../api.js';
 import {
@@ -272,6 +272,17 @@ export const ShareView: React.FC<ShareViewProps> = ({
     window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, '_blank');
   };
 
+  // XML string escaper helper
+  const escapeXml = (unsafe: string): string => {
+    if (!unsafe) return '';
+    return String(unsafe)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
   // Direct vector SVG generator for local client downloads
   const generateClientSvg = () => {
     const [wStr, hStr] = size.split('x');
@@ -290,7 +301,11 @@ export const ShareView: React.FC<ShareViewProps> = ({
     const pad = 40;
     const innerW = width - pad * 2;
     const innerH = height - pad * 2;
-    const contentW = innerW - 80;
+    const contentX = pad + 44;
+    const contentW = innerW - 88;
+
+    const safeTitle = escapeXml(title);
+    const safeSubtitle = escapeXml(subtitle);
 
     let bodySvg = '';
 
@@ -313,15 +328,15 @@ export const ShareView: React.FC<ShareViewProps> = ({
         const y = row * 120;
         return `
           <rect x="${x}" y="${y}" width="${colW}" height="100" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
-          <text x="${x + 20}" y="${y + 48}" class="stat-val">${item.val}</text>
-          <text x="${x + 20}" y="${y + 78}" class="stat-label">${item.label}</text>
+          <text x="${x + 20}" y="${y + 48}" class="stat-val">${escapeXml(item.val)}</text>
+          <text x="${x + 20}" y="${y + 78}" class="stat-label">${escapeXml(item.label)}</text>
         `;
       }).join('');
 
-      const barY = Math.ceil(items.length / colCount) * 120 + 20;
+      const barY = Math.ceil(items.length / colCount) * 120 + 24;
 
       bodySvg = `
-        <g transform="translate(80, 160)">
+        <g transform="translate(${contentX}, ${pad + 140})">
           ${boxes}
           <g transform="translate(0, ${barY})">
             <text x="0" y="-12" class="section-label">LIVELINESS DISTRIBUTION</text>
@@ -346,25 +361,25 @@ export const ShareView: React.FC<ShareViewProps> = ({
       const colW = (contentW - (colCount - 1) * colGap) / colCount;
 
       bodySvg = `
-        <g transform="translate(80, 160)">
+        <g transform="translate(${contentX}, ${pad + 140})">
           <rect x="0" y="0" width="${colW}" height="200" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
           <text x="24" y="65" class="hero-val">${computedStats.longestStreak}</text>
           <text x="24" y="100" class="hero-unit">DAYS</text>
-          <text x="24" y="135" class="stat-label">Longest Continuous Streak</text>
+          <text x="24" y="135" class="stat-label">Longest Streak</text>
           <text x="24" y="165" class="stat-sub">Current: ${computedStats.currentStreak} consecutive days</text>
 
           <rect x="${colW + colGap}" y="0" width="${colW}" height="200" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
           <text x="${colW + colGap + 24}" y="65" class="hero-val">${computedStats.periodCommits}</text>
           <text x="${colW + colGap + 24}" y="100" class="hero-unit">COMMITS</text>
-          <text x="${colW + colGap + 24}" y="135" class="stat-label">${computedStats.periodLabel}</text>
-          <text x="${colW + colGap + 24}" y="165" class="stat-sub">Peak day: ${computedStats.mostActiveWeekday}</text>
+          <text x="${colW + colGap + 24}" y="135" class="stat-label">${escapeXml(computedStats.periodLabel)}</text>
+          <text x="${colW + colGap + 24}" y="165" class="stat-sub">Peak day: ${escapeXml(computedStats.mostActiveWeekday)}</text>
 
           ${colCount > 2 ? `
             <rect x="${(colW + colGap) * 2}" y="0" width="${colW}" height="200" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
             <text x="${(colW + colGap) * 2 + 24}" y="65" class="hero-val">${computedStats.activeCount}</text>
             <text x="${(colW + colGap) * 2 + 24}" y="100" class="hero-unit">ACTIVE</text>
             <text x="${(colW + colGap) * 2 + 24}" y="135" class="stat-label">Active Repositories</text>
-            <text x="${(colW + colGap) * 2 + 24}" y="165" class="stat-sub">In motion</text>
+            <text x="${(colW + colGap) * 2 + 24}" y="165" class="stat-sub">In active motion</text>
           ` : ''}
         </g>
       `;
@@ -377,8 +392,8 @@ export const ShareView: React.FC<ShareViewProps> = ({
         return `
           <g transform="translate(0, ${y})">
             <circle cx="8" cy="14" r="4" fill="${statusColor}" />
-            <text x="24" y="18" class="repo-name">${r.name}</text>
-            <text x="${barStart - 90}" y="18" class="repo-meta">${r.language}</text>
+            <text x="24" y="18" class="repo-name">${escapeXml(r.name)}</text>
+            <text x="${barStart - 90}" y="18" class="repo-meta">${escapeXml(r.language)}</text>
             <rect x="${barStart}" y="6" width="${barW}" height="16" rx="2" fill="${borderColor}" />
             <rect x="${barStart}" y="6" width="${Math.min(barW, Math.max(8, (r.commits || 1) * 12))}" height="16" rx="2" fill="${statusColor}" />
             <text x="${barStart + barW + 16}" y="18" class="repo-meta">${r.commits} commits</text>
@@ -387,7 +402,7 @@ export const ShareView: React.FC<ShareViewProps> = ({
       }).join('');
 
       bodySvg = `
-        <g transform="translate(80, 160)">
+        <g transform="translate(${contentX}, ${pad + 140})">
           <text x="0" y="-12" class="section-label">ACTIVE REPOSITORY LEDGER</text>
           ${rows || `<text x="0" y="30" class="subtext">No repositories to display.</text>`}
         </g>
@@ -399,7 +414,7 @@ export const ShareView: React.FC<ShareViewProps> = ({
         const barW = Math.max(120, contentW - nameW - 140);
         return `
           <g transform="translate(0, ${y})">
-            <text x="0" y="18" class="repo-name">${l.name}</text>
+            <text x="0" y="18" class="repo-name">${escapeXml(l.name)}</text>
             <rect x="${nameW}" y="6" width="${barW}" height="14" rx="2" fill="${borderColor}" />
             <rect x="${nameW}" y="6" width="${Math.max(4, (l.percentage / 100) * barW)}" height="14" rx="2" fill="${accentColor}" />
             <text x="${nameW + barW + 20}" y="18" class="repo-meta">${l.percentage}% (${l.count} repos)</text>
@@ -408,7 +423,7 @@ export const ShareView: React.FC<ShareViewProps> = ({
       }).join('');
 
       bodySvg = `
-        <g transform="translate(80, 160)">
+        <g transform="translate(${contentX}, ${pad + 140})">
           <text x="0" y="-12" class="section-label">LANGUAGE DISTRIBUTION</text>
           ${rows || `<text x="0" y="30" class="subtext">No language data recorded yet.</text>`}
         </g>
@@ -431,15 +446,15 @@ export const ShareView: React.FC<ShareViewProps> = ({
           <g transform="translate(${x}, ${y})">
             <rect x="0" y="0" width="${badgeW}" height="90" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
             <circle cx="36" cy="45" r="18" fill="${accentColor}" fill-opacity="0.15" />
-            <text x="36" y="51" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="${accentColor}">✓</text>
-            <text x="68" y="38" class="badge-title">${b.name}</text>
-            <text x="68" y="58" class="badge-desc">${b.description}</text>
+            <path d="M29 45 L34 50 L43 41" fill="none" stroke="${accentColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            <text x="68" y="38" class="badge-title">${escapeXml(b.name)}</text>
+            <text x="68" y="58" class="badge-desc">${escapeXml(b.description)}</text>
           </g>
         `;
       }).join('');
 
       bodySvg = `
-        <g transform="translate(80, 160)">
+        <g transform="translate(${contentX}, ${pad + 140})">
           <text x="0" y="-12" class="section-label">EARNED MILESTONES & ACHIEVEMENTS</text>
           ${badgeSvg}
         </g>
@@ -447,7 +462,7 @@ export const ShareView: React.FC<ShareViewProps> = ({
     } else if (template === 'triage_progress') {
       const boxW = (contentW - 20) / 2;
       bodySvg = `
-        <g transform="translate(80, 160)">
+        <g transform="translate(${contentX}, ${pad + 140})">
           <rect x="0" y="0" width="${boxW}" height="190" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1" />
           <text x="28" y="45" class="stat-label">REPOSITORIES IN ACTIVE RETENTION</text>
           <text x="28" y="105" class="hero-val">${computedStats.activeCount}</text>
@@ -464,28 +479,28 @@ export const ShareView: React.FC<ShareViewProps> = ({
     return `
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
         <style>
-          .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 28px; font-weight: 700; fill: ${textColor}; }
-          .subtext { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; fill: ${subtextColor}; }
-          .section-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; fill: ${subtextColor}; }
-          .stat-val { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 32px; font-weight: 700; fill: ${textColor}; }
-          .stat-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 500; fill: ${subtextColor}; }
-          .stat-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: ${subtextColor}; }
-          .hero-val { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 52px; font-weight: 700; fill: ${textColor}; }
-          .hero-unit { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; fill: ${subtextColor}; }
-          .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: ${textColor}; }
-          .repo-name { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; fill: ${textColor}; }
-          .repo-meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: ${subtextColor}; }
-          .badge-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; fill: ${textColor}; }
-          .badge-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: ${subtextColor}; }
+          .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; fill: ${textColor}; }
+          .subtext { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; fill: ${subtextColor}; }
+          .section-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; fill: ${subtextColor}; }
+          .stat-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 700; fill: ${textColor}; }
+          .stat-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; fill: ${subtextColor}; }
+          .stat-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: ${subtextColor}; }
+          .hero-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 52px; font-weight: 700; fill: ${textColor}; }
+          .hero-unit { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; fill: ${subtextColor}; }
+          .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 500; fill: ${textColor}; }
+          .repo-name { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 14px; font-weight: 600; fill: ${textColor}; }
+          .repo-meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: ${subtextColor}; }
+          .badge-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; fill: ${textColor}; }
+          .badge-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: ${subtextColor}; }
         </style>
         <rect width="${width}" height="${height}" fill="${bgColor}" />
         <rect x="${pad}" y="${pad}" width="${innerW}" height="${innerH}" rx="8" fill="${surfaceColor}" stroke="${borderColor}" stroke-width="1" />
-        <g transform="translate(80, 85)">
-          <text x="0" y="0" class="title">${title}</text>
-          <text x="0" y="26" class="subtext">${subtitle}</text>
+        <g transform="translate(${contentX}, ${pad + 44})">
+          <text x="0" y="32" class="title">${safeTitle}</text>
+          <text x="0" y="66" class="subtext">${safeSubtitle}</text>
         </g>
         ${bodySvg}
-        ${watermark ? `<text x="${width - pad - 30}" y="${height - pad - 24}" text-anchor="end" class="subtext" style="font-size: 12px;">Made with RepoPulse</text>` : ''}
+        ${watermark ? `<text x="${width - pad - 44}" y="${height - pad - 28}" text-anchor="end" class="subtext" style="font-size: 13px; font-weight: 500;">Made with RepoPulse</text>` : ''}
       </svg>
     `;
   };
@@ -506,78 +521,114 @@ export const ShareView: React.FC<ShareViewProps> = ({
   };
 
   const handleDownloadPng = () => {
-    const svgCode = generateClientSvg();
-    const [wStr, hStr] = size.split('x');
-    const width = parseInt(wStr, 10) || 1200;
-    const height = parseInt(hStr, 10) || 630;
+    try {
+      const svgCode = generateClientSvg();
+      const [wStr, hStr] = size.split('x');
+      const width = parseInt(wStr, 10) || 1200;
+      const height = parseInt(hStr, 10) || 630;
 
-    const img = new Image();
-    const svgBlob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
+      const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
 
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const pngUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = pngUrl;
-            link.download = `repopulse-${user.login}-${template}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(pngUrl);
-            setActionFeedback('PNG card downloaded');
-            setTimeout(() => setActionFeedback(null), 3000);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((pngBlob) => {
+              if (pngBlob) {
+                const pngUrl = URL.createObjectURL(pngBlob);
+                const link = document.createElement('a');
+                link.href = pngUrl;
+                link.download = `repopulse-${user.login}-${template}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
+                setActionFeedback('PNG card downloaded');
+                setTimeout(() => setActionFeedback(null), 3000);
+              } else {
+                handleDownloadSvg();
+              }
+            }, 'image/png');
+          } else {
+            handleDownloadSvg();
           }
-        }, 'image/png');
-      }
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
+        } catch {
+          handleDownloadSvg();
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        handleDownloadSvg();
+      };
+
+      img.src = url;
+    } catch {
+      handleDownloadSvg();
+    }
   };
 
   const handleCopyImage = () => {
-    const svgCode = generateClientSvg();
-    const [wStr, hStr] = size.split('x');
-    const width = parseInt(wStr, 10) || 1200;
-    const height = parseInt(hStr, 10) || 630;
+    try {
+      const svgCode = generateClientSvg();
+      const [wStr, hStr] = size.split('x');
+      const width = parseInt(wStr, 10) || 1200;
+      const height = parseInt(hStr, 10) || 630;
 
-    const img = new Image();
-    const svgBlob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
+      const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
 
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob(async (blob) => {
-          if (blob && navigator.clipboard?.write) {
-            try {
-              await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob }),
-              ]);
-              setActionFeedback('Image copied to clipboard!');
-              setTimeout(() => setActionFeedback(null), 3000);
-            } catch {
-              handleDownloadPng();
-            }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(async (pngBlob) => {
+              if (pngBlob && navigator.clipboard?.write) {
+                try {
+                  await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': pngBlob }),
+                  ]);
+                  setActionFeedback('Image copied to clipboard!');
+                  setTimeout(() => setActionFeedback(null), 3000);
+                } catch {
+                  handleDownloadPng();
+                }
+              } else {
+                handleDownloadPng();
+              }
+            }, 'image/png');
           } else {
             handleDownloadPng();
           }
-        }, 'image/png');
-      }
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
+        } catch {
+          handleDownloadPng();
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        handleDownloadPng();
+      };
+
+      img.src = url;
+    } catch {
+      handleDownloadPng();
+    }
   };
 
   const isDark = theme === 'dark' || theme === 'heat-accent';
