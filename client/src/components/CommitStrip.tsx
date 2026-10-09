@@ -32,17 +32,46 @@ export const CommitStrip: React.FC<CommitStripProps> = ({
     });
   }
 
+  const statusColorMap: Record<RepoStatus, string> = {
+    active: 'var(--heat-active)',
+    cooling: 'var(--heat-cooling)',
+    stale: 'var(--heat-stale)',
+    dead: 'var(--heat-dead)',
+  };
+
+  const statusColor = statusColorMap[status] || 'var(--heat-active)';
+
   return (
-    <div className="strip-90" title={`${daysCount}-day commit activity`}>
+    <div
+      className="strip-90"
+      title={`${daysCount}-day commit activity`}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: '1px',
+        width: '100%',
+        height: '28px',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+      }}
+    >
       {days.map((day, idx) => {
         const heightPx = day.commits === 0 ? 3 : Math.min(28, 4 + day.commits * 4);
-        const barClass = day.commits > 0 ? status : '';
+        const bg = day.commits > 0 ? statusColor : 'var(--line)';
 
         return (
           <div
             key={idx}
-            className={`strip-bar-90 ${barClass} ${day.isWeekTick ? 'week-tick' : ''}`}
-            style={{ height: `${heightPx}px` }}
+            className={`strip-bar-90 ${day.commits > 0 ? status : ''} ${day.isWeekTick ? 'week-tick' : ''}`}
+            style={{
+              flex: '1 1 0px',
+              minWidth: '1px',
+              height: `${heightPx}px`,
+              backgroundColor: bg,
+              borderRadius: '1px',
+              opacity: day.commits === 0 ? 0.6 : 1,
+              boxSizing: 'border-box',
+            }}
             title={`${day.dateStr}: ${day.commits} commit${day.commits === 1 ? '' : 's'}`}
           />
         );
@@ -50,3 +79,4 @@ export const CommitStrip: React.FC<CommitStripProps> = ({
     </div>
   );
 };
+

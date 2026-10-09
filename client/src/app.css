@@ -1712,3 +1712,45 @@ a {
   color: var(--ink);
 }
 
+/* 90-Day Commit Strip */
+.strip-90 {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 28px;
+  width: 100%;
+  max-width: 480px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.strip-bar-90 {
+  flex: 1 1 0px;
+  min-width: 1px;
+  background-color: var(--line);
+  border-radius: 1px;
+  transition: height 0.15s ease, background-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.strip-bar-90.active {
+  background-color: var(--heat-active);
+}
+
+.strip-bar-90.cooling {
+  background-color: var(--heat-cooling);
+}
+
+.strip-bar-90.stale {
+  background-color: var(--heat-stale);
+}
+
+.strip-bar-90.dead {
+  background-color: var(--heat-dead);
+}
+
+.strip-bar-90.week-tick {
+  opacity: 0.85;
+}
+
+

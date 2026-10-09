@@ -278,13 +278,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Hero Visual: Component Preview */}
-          <div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
             <div style={{
               backgroundColor: 'var(--surface)',
               border: '1px solid var(--line)',
               borderRadius: 'var(--r)',
               padding: '20px',
               boxShadow: 'none',
+              overflow: 'hidden',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
@@ -317,24 +318,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     style={{
                       backgroundColor: 'var(--surface)',
                       padding: '12px 14px',
-                      display: 'flex',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr minmax(140px, 200px)',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
+                      gap: '16px',
+                      overflow: 'hidden',
                     }}
                   >
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {repo.name}
                         </span>
-                        {repo.is_private && <Lock size={12} strokeWidth={1.75} style={{ color: 'var(--ink-2)' }} />}
+                        {repo.is_private && <Lock size={12} strokeWidth={1.75} style={{ color: 'var(--ink-2)', flexShrink: 0 }} />}
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {repo.meta}
                       </div>
                     </div>
-                    <div style={{ width: '160px' }}>
-                      <CommitStrip activity={repo.activity} status={repo.status} />
+                    <div style={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
+                      <CommitStrip activity={repo.activity} status={repo.status} daysCount={90} />
                     </div>
                   </div>
                 ))}
@@ -344,6 +347,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Live 90-day activity strips with instant health classification
             </div>
           </div>
+
         </div>
       </section>
 
