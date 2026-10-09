@@ -13,10 +13,6 @@ const envSchema = z.object({
     (val) => val === 'true' || val === true || val === '1',
     z.boolean()
   ).default(false),
-  DEMO_MODE_ENABLED: z.preprocess(
-    (val) => val === 'true' || val === true || val === '1',
-    z.boolean()
-  ).default(true),
   GITHUB_APP_ID: z.string().optional(),
   GITHUB_APP_SLUG: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),

@@ -12,7 +12,6 @@ import {
   destroyAllUserSessions,
 } from '../auth/session.js';
 import { requireAuth, authRateLimiter } from '../auth/middleware.js';
-import { hashPassword, verifyPassword } from '../auth/password.js';
 import { db } from '../db/index.js';
 import { runUserSync } from '../sync/engine.js';
 import { logger } from '../utils/logger.js';
@@ -48,12 +47,12 @@ export function getRequestBaseUrl(req: import('express').Request): string {
 
 /**
  * GET /auth/status
- * Public status endpoint indicating OAuth & Demo configuration
+ * Public status endpoint indicating GitHub App configuration
  */
 authRouter.get('/status', (req, res) => {
   res.json({
     githubConfigured: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
-    demoEnabled: Boolean(env.DEMO_MODE_ENABLED),
+    demoEnabled: env.NODE_ENV !== 'production' && Boolean(env.DEV_LOGIN_ENABLED),
     appUrl: getRequestBaseUrl(req),
     clientId: env.GITHUB_CLIENT_ID ? `${env.GITHUB_CLIENT_ID.substring(0, 4)}...` : null,
   });
@@ -89,6 +88,18 @@ authRouter.get('/github/start', (req, res) => {
  * Handles GitHub OAuth callback, verifies state, upserts user, creates session, redirects
  */
 authRouter.get('/github/callback', async (req, res) => {
+  if (req.query.error) {
+    const errCode = req.query.error as string;
+    const errDesc = req.query.error_description as string;
+    logger.warn({ errCode, errDesc }, 'OAuth error returned from GitHub');
+    if (errCode === 'access_denied') {
+      res.redirect('/?error=access_denied');
+      return;
+    }
+    res.redirect(`/?error=${encodeURIComponent(errCode)}`);
+    return;
+  }
+
   const code = req.query.code as string;
   const state = req.query.state as string;
 
@@ -121,55 +132,16 @@ authRouter.get('/github/callback', async (req, res) => {
     // Trigger initial repository sync with user's GitHub account
     runUserSync(user.id).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
 
-    res.redirect('/');
+    // Check if this is a first-time user onboarding
+    const existingRepos = await db.getUserRepos(user.id);
+    if (existingRepos.length === 0) {
+      res.redirect('/welcome');
+    } else {
+      res.redirect('/');
+    }
   } catch (err: any) {
     logger.error({ error: err.message }, 'OAuth callback processing failed');
     res.redirect('/?error=auth_failed');
-  }
-});
-
-/**
- * POST /auth/demo-login
- * Demo / guest exploration session with pre-populated sample repos
- */
-authRouter.post('/demo-login', async (req, res) => {
-  if (!env.DEMO_MODE_ENABLED && env.NODE_ENV === 'production') {
-    res.status(403).json({
-      error: 'Forbidden',
-      message: 'Demo login is disabled on this server.',
-    });
-    return;
-  }
-
-  try {
-    const user = await db.upsertUser({
-      github_user_id: '888888888',
-      login: 'demo-user',
-      name: 'Demo Showcase',
-      avatar_url: 'https://avatars.githubusercontent.com/u/9919?s=200&v=4',
-    });
-
-    await createSession(user.id, req, res);
-    await db.logAudit(user.id, 'user_logged_in', { method: 'demo_login' });
-
-    // Ensure sample repos exist
-    const repos = await db.getUserRepos(user.id);
-    if (repos.length === 0) {
-      await runUserSync(user.id);
-    }
-
-    res.json({
-      ok: true,
-      user: {
-        id: String(user.id),
-        login: user.login,
-        name: user.name,
-        avatar_url: user.avatar_url,
-      },
-    });
-  } catch (err: any) {
-    logger.error({ error: err.message }, 'Demo login failed');
-    res.status(500).json({ error: 'Internal Server Error', message: err.message });
   }
 });
 
@@ -178,7 +150,7 @@ authRouter.post('/demo-login', async (req, res) => {
  * Local development only login endpoint. Strictly blocked in production when DEV_LOGIN_ENABLED is false.
  */
 authRouter.post('/dev-login', async (req, res) => {
-  if (env.NODE_ENV === 'production' && !env.DEV_LOGIN_ENABLED && !env.DEMO_MODE_ENABLED) {
+  if (env.NODE_ENV === 'production' || !env.DEV_LOGIN_ENABLED) {
     res.status(403).json({
       error: 'Forbidden',
       message: 'Dev login is disabled in production environments.',
@@ -215,188 +187,6 @@ authRouter.post('/dev-login', async (req, res) => {
   } catch (err: any) {
     logger.error({ error: err.message }, 'Dev login failed');
     res.status(500).json({ error: 'Internal Server Error', message: err.message });
-  }
-});
-
-/**
- * POST /auth/register
- * Direct account creation with username, optional email, and password
- */
-authRouter.post('/register', async (req, res) => {
-  const { login, email, password, name } = req.body;
-
-  if (!login || typeof login !== 'string' || login.trim().length < 2) {
-    res.status(400).json({ error: 'Validation Error', message: 'Username must be at least 2 characters.' });
-    return;
-  }
-
-  if (!password || typeof password !== 'string' || password.length < 6) {
-    res.status(400).json({ error: 'Validation Error', message: 'Password must be at least 6 characters.' });
-    return;
-  }
-
-  const existing = await db.findUserByLoginOrEmail(login);
-  if (existing) {
-    res.status(409).json({ error: 'Conflict', message: 'Username or email is already taken.' });
-    return;
-  }
-
-  if (email && typeof email === 'string' && email.includes('@')) {
-    const existingEmail = await db.findUserByLoginOrEmail(email);
-    if (existingEmail) {
-      res.status(409).json({ error: 'Conflict', message: 'Email address is already in use.' });
-      return;
-    }
-  }
-
-  try {
-    const passwordHash = hashPassword(password);
-    const user = await db.createUserWithPassword({
-      login: login.trim(),
-      email: email ? email.trim() : null,
-      password_hash: passwordHash,
-      name: name ? name.trim() : login.trim(),
-    });
-
-    await createSession(user.id, req, res);
-    await db.logAudit(user.id, 'user_registered', { method: 'password' });
-
-    // Populate starter dataset until GitHub is linked
-    await runUserSync(user.id);
-
-    res.json({
-      ok: true,
-      user: {
-        id: String(user.id),
-        login: user.login,
-        name: user.name,
-        avatar_url: user.avatar_url,
-        email: user.email,
-      },
-    });
-  } catch (err: any) {
-    logger.error({ error: err.message }, 'User registration failed');
-    res.status(500).json({ error: 'Registration Error', message: err.message });
-  }
-});
-
-/**
- * POST /auth/login
- * Password authentication with username or email
- */
-authRouter.post('/login', async (req, res) => {
-  const { loginOrEmail, password } = req.body;
-
-  if (!loginOrEmail || !password) {
-    res.status(400).json({ error: 'Bad Request', message: 'Username/Email and Password are required.' });
-    return;
-  }
-
-  try {
-    const user = await db.findUserByLoginOrEmail(String(loginOrEmail));
-    if (!user || !user.password_hash) {
-      res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials. If this account was created via GitHub, please sign in with GitHub.' });
-      return;
-    }
-
-    const isValid = verifyPassword(String(password), user.password_hash);
-    if (!isValid) {
-      res.status(401).json({ error: 'Unauthorized', message: 'Invalid password. Please try again.' });
-      return;
-    }
-
-    await createSession(user.id, req, res);
-    await db.logAudit(user.id, 'user_logged_in', { method: 'password' });
-
-    res.json({
-      ok: true,
-      user: {
-        id: String(user.id),
-        login: user.login,
-        name: user.name,
-        avatar_url: user.avatar_url,
-        email: user.email,
-      },
-    });
-  } catch (err: any) {
-    logger.error({ error: err.message }, 'Password login failed');
-    res.status(500).json({ error: 'Internal Server Error', message: err.message });
-  }
-});
-
-/**
- * POST /auth/connect-token
- * Link GitHub Personal Access Token to current user account and trigger live sync
- */
-authRouter.post('/connect-token', requireAuth, async (req, res) => {
-  const { token } = req.body;
-  if (!token || typeof token !== 'string' || token.trim().length < 8) {
-    res.status(400).json({ error: 'Bad Request', message: 'A valid GitHub Personal Access Token is required.' });
-    return;
-  }
-
-  const cleanToken = token.trim();
-  const userId = req.user!.id;
-
-  try {
-    // Verify token with GitHub API
-    const userRes = await fetch('https://api.github.com/user', {
-      headers: {
-        'Authorization': `Bearer ${cleanToken}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'RepoPulse-v2',
-      },
-    });
-
-    if (!userRes.ok) {
-      res.status(400).json({
-        error: 'Invalid Token',
-        message: 'Could not authenticate with GitHub using this token. Please check that it is valid and has read-only repo permissions.',
-      });
-      return;
-    }
-
-    const ghUser = (await userRes.json()) as any;
-
-    await db.linkTokenToUser(userId, cleanToken, {
-      github_user_id: ghUser.id,
-      login: ghUser.login,
-      avatar_url: ghUser.avatar_url,
-    });
-
-    await db.logAudit(userId, 'github_token_linked', { github_login: ghUser.login });
-
-    // Trigger instant synchronization with user's real repos!
-    runUserSync(userId).catch((e) => logger.error({ error: e.message }, 'Token sync error'));
-
-    res.json({
-      ok: true,
-      message: `Successfully connected to GitHub as @${ghUser.login}! Repositories are now syncing.`,
-      github_user: {
-        id: String(ghUser.id),
-        login: ghUser.login,
-        name: ghUser.name,
-        avatar_url: ghUser.avatar_url,
-      },
-    });
-  } catch (err: any) {
-    logger.error({ error: err.message }, 'Connect token failed');
-    res.status(500).json({ error: 'Connection Error', message: err.message });
-  }
-});
-
-/**
- * DELETE /auth/disconnect-github
- * Unlink GitHub token from current user account
- */
-authRouter.delete('/disconnect-github', requireAuth, async (req, res) => {
-  const userId = req.user!.id;
-  try {
-    await db.linkTokenToUser(userId, '', { github_user_id: undefined, avatar_url: undefined });
-    await db.logAudit(userId, 'github_disconnected');
-    res.json({ ok: true, message: 'GitHub connection removed.' });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Disconnection Error', message: err.message });
   }
 });
 

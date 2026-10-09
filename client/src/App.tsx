@@ -16,7 +16,8 @@ import { TriageView } from './components/TriageView.js';
 import { ArchiveView } from './components/ArchiveView.js';
 import { SettingsView } from './components/SettingsView.js';
 import { RepoDetailModal } from './components/RepoDetailModal.js';
-import { OnboardingView } from './components/OnboardingView.js';
+import { LandingPage } from './components/LandingPage.js';
+import { WelcomeView } from './components/WelcomeView.js';
 import { SkeletonRow, Toast, ErrorBanner } from './components/FeedbackComponents.js';
 
 interface UndoAction {
@@ -40,6 +41,8 @@ export const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'triage' | 'archive' | 'settings'>('overview');
   const [selectedRepoForDetail, setSelectedRepoForDetail] = useState<Repository | null>(null);
+  const [isWelcomeRoute, setIsWelcomeRoute] = useState<boolean>(() => window.location.pathname === '/welcome');
+  const [devEnabled, setDevEnabled] = useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -66,6 +69,13 @@ export const App: React.FC = () => {
     }
   }, [settings.theme]);
 
+  // Check auth status for dev mode
+  useEffect(() => {
+    api.fetchAuthStatus().then((st) => {
+      setDevEnabled(st.demoEnabled);
+    }).catch(() => {});
+  }, []);
+
   // Load user profile and initial repository data via /api/me
   const loadInitialData = useCallback(async () => {
     setIsLoading(true);
@@ -82,22 +92,9 @@ export const App: React.FC = () => {
       setSummarySentence(reposData.summary);
       setStats(reposData.stats);
 
-      // If user is authenticated but has 0 repos, initiate auto-sync
-      if (reposData.repos.length === 0 && meData.user) {
-        setIsSyncing(true);
-        try {
-          const syncRes = await api.triggerSync(false);
-          if (syncRes.ok) {
-            const updated = await api.fetchRepos();
-            setRepos(updated.repos);
-            setSummarySentence(updated.summary);
-            setStats(updated.stats);
-          }
-        } catch {
-          // ignore rate limits or initial state
-        } finally {
-          setIsSyncing(false);
-        }
+      // If user has zero repos and is on /welcome or first login
+      if (reposData.repos.length === 0 && meData.user && window.location.pathname === '/welcome') {
+        setIsWelcomeRoute(true);
       }
     } catch {
       // User is unauthenticated
@@ -268,78 +265,6 @@ export const App: React.FC = () => {
     showToast('Signed out everywhere');
   };
 
-  // Register Account
-  const handleRegister = async (params: { login: string; email?: string; password: string; name?: string }) => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      await api.registerUser(params);
-      await loadInitialData();
-      showToast(`Account created! Welcome, @${params.login}`);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Registration failed');
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Password Sign In
-  const handlePasswordLogin = async (params: { loginOrEmail: string; password: string }) => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      await api.loginWithPassword(params);
-      await loadInitialData();
-      showToast('Signed in successfully');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Sign in failed');
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Connect GitHub Token (PAT)
-  const handleConnectToken = async (token: string) => {
-    setIsSyncing(true);
-    try {
-      const res = await api.connectGitHubToken(token);
-      await loadInitialData();
-      showToast(res.message || 'GitHub account connected!');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to connect GitHub');
-      throw err;
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Disconnect GitHub
-  const handleDisconnectGitHub = async () => {
-    try {
-      await api.disconnectGitHub();
-      await loadInitialData();
-      showToast('GitHub disconnected');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to disconnect GitHub');
-    }
-  };
-
-  // Demo Login
-  const handleDemoLogin = async () => {
-    setIsLoading(true);
-    try {
-      await api.loginDemoUser();
-      await loadInitialData();
-      showToast('Welcome to RepoPulse Demo! Explore triage, ledger, and analytics.');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Demo login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Dev Login
   const handleDevLogin = async () => {
     setIsLoading(true);
@@ -371,22 +296,39 @@ export const App: React.FC = () => {
     );
   }
 
-  // Unauthenticated Route Guard
+  // Unauthenticated Route Guard: Show clean Landing Page
   if (!user) {
     return (
       <>
         {toastMessage && (
           <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
         )}
-        <OnboardingView
+        <LandingPage
           onGithubLogin={handleGithubLogin}
-          onRegister={handleRegister}
-          onPasswordLogin={handlePasswordLogin}
-          onDemoLogin={handleDemoLogin}
           onDevLogin={handleDevLogin}
-          isLoading={isLoading}
+          devEnabled={devEnabled}
         />
       </>
+    );
+  }
+
+  // First-time Onboarding View at /welcome
+  if (isWelcomeRoute) {
+    return (
+      <WelcomeView
+        repos={repos}
+        onRefreshRepos={refreshRepos}
+        onComplete={() => {
+          setIsWelcomeRoute(false);
+          window.history.pushState({}, '', '/');
+          setActiveTab('overview');
+        }}
+        onStartTriage={() => {
+          setIsWelcomeRoute(false);
+          window.history.pushState({}, '', '/');
+          setActiveTab('triage');
+        }}
+      />
     );
   }
 
@@ -456,9 +398,6 @@ export const App: React.FC = () => {
           onUpdateSettings={handleUpdateSettings}
           onExportData={handleExportData}
           onDeleteAccount={handleDeleteAccount}
-          onConnectToken={handleConnectToken}
-          onDisconnectGitHub={handleDisconnectGitHub}
-          onGithubLogin={handleGithubLogin}
         />
       )}
 

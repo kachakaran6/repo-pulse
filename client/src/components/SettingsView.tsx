@@ -1,27 +1,23 @@
 import React, { useState } from 'react';
 import type { UserSettings, InstallationStatus, ThemeChoice } from '../types.js';
-import { ExternalLink, Key, Check, AlertCircle, Unlink } from 'lucide-react';
+import { ExternalLink, AlertCircle, Trash2, Download } from 'lucide-react';
 
 interface SettingsViewProps {
   settings: UserSettings;
   installation: InstallationStatus;
+  installations?: any[];
   onUpdateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
   onExportData: () => void;
   onDeleteAccount: () => Promise<void>;
-  onConnectToken?: (token: string) => Promise<void>;
-  onDisconnectGitHub?: () => Promise<void>;
-  onGithubLogin?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   installation,
+  installations = [],
   onUpdateSettings,
   onExportData,
   onDeleteAccount,
-  onConnectToken,
-  onDisconnectGitHub,
-  onGithubLogin,
 }) => {
   const [activeDays, setActiveDays] = useState(settings.active_days);
   const [coolingDays, setCoolingDays] = useState(settings.cooling_days);
@@ -29,44 +25,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [theme, setTheme] = useState<ThemeChoice>(settings.theme);
 
   const [thresholdError, setThresholdError] = useState<string | null>(null);
+  const [thresholdSuccess, setThresholdSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Token input state
-  const [showTokenInput, setShowTokenInput] = useState(false);
-  const [githubToken, setGithubToken] = useState('');
-  const [isConnectingToken, setIsConnectingToken] = useState(false);
-  const [tokenMessage, setTokenMessage] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
-
-  const handleTokenSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!githubToken.trim() || !onConnectToken) return;
-    setIsConnectingToken(true);
-    setTokenError(null);
-    setTokenMessage(null);
-    try {
-      await onConnectToken(githubToken.trim());
-      setTokenMessage('GitHub connected successfully! Repositories are now syncing.');
-      setGithubToken('');
-      setShowTokenInput(false);
-    } catch (err: any) {
-      setTokenError(err.message || 'Failed to connect token');
-    } finally {
-      setIsConnectingToken(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    if (!onDisconnectGitHub) return;
-    if (window.confirm('Disconnect your GitHub account?')) {
-      await onDisconnectGitHub();
-    }
-  };
-
-  // Determine if threshold values changed from saved settings
   const hasThresholdsChanged =
     activeDays !== settings.active_days ||
     coolingDays !== settings.cooling_days ||
@@ -75,13 +40,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleSaveThresholds = async (e: React.FormEvent) => {
     e.preventDefault();
     setThresholdError(null);
+    setThresholdSuccess(false);
+
+    if (activeDays <= 0 || coolingDays <= 0 || staleDays <= 0) {
+      setThresholdError('All thresholds must be positive numbers.');
+      return;
+    }
 
     if (activeDays >= coolingDays) {
-      setThresholdError('Active days must be less than Cooling days.');
+      setThresholdError('Active days must be strictly less than Cooling days.');
       return;
     }
     if (coolingDays >= staleDays) {
-      setThresholdError('Cooling days must be less than Stale days.');
+      setThresholdError('Cooling days must be strictly less than Stale days.');
       return;
     }
 
@@ -92,6 +63,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         cooling_days: coolingDays,
         stale_days: staleDays,
       });
+      setThresholdSuccess(true);
+      setTimeout(() => setThresholdSuccess(false), 3000);
     } catch (err: any) {
       setThresholdError(err.message || 'Failed to save thresholds');
     } finally {
@@ -104,288 +77,388 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     await onUpdateSettings({ theme: newTheme });
   };
 
-  const handleDelete = async () => {
-    if (deleteConfirmText.toLowerCase() !== 'delete') {
-      return;
-    }
+  const handleDeleteAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (deleteConfirmText !== 'DELETE') return;
     setIsDeleting(true);
     try {
       await onDeleteAccount();
-    } finally {
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete account');
       setIsDeleting(false);
     }
   };
 
+  const effectiveInstallations = installations.length > 0
+    ? installations
+    : (installation.connected ? [{
+        id: '1',
+        account_login: installation.account_login || 'Personal Account',
+        account_type: 'User',
+        selection: installation.repository_selection || 'all',
+        repo_count: installation.repository_count || 0,
+        private_repo_count: 0,
+        public_repo_count: installation.repository_count || 0,
+        github_installation_id: installation.installation_id || '0',
+      }] : []);
+
   return (
-    <div className="settings-ledger">
-      <div style={{ paddingBottom: '16px', borderBottom: '1px solid var(--line)' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>
-          Settings
-        </h1>
-        <p style={{ fontSize: '14px', color: 'var(--ink-2)' }}>
-          Configure repository activity thresholds, connected GitHub installation, appearance, and data portability.
-        </p>
-      </div>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 0 64px 0' }}>
+      <h1 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 32px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
+        Settings
+      </h1>
 
-      {/* Row 1: Status Thresholds */}
-      <form onSubmit={handleSaveThresholds} className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label">Activity Thresholds</div>
-          <div className="settings-desc">
-            Controls how days of inactivity group repositories across the temperature scale.
-          </div>
-          {thresholdError && (
-            <div style={{ color: 'var(--heat-active)', fontSize: '13px', marginTop: '4px' }}>
-              {thresholdError}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-          <div className="threshold-sentence">
-            <span>Active up to</span>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              className="inline-num-input"
-              value={activeDays}
-              onChange={(e) => setActiveDays(Number(e.target.value))}
-            />
-            <span>days, Cooling up to</span>
-            <input
-              type="number"
-              min={2}
-              max={180}
-              className="inline-num-input"
-              value={coolingDays}
-              onChange={(e) => setCoolingDays(Number(e.target.value))}
-            />
-            <span>, Stale up to</span>
-            <input
-              type="number"
-              min={3}
-              max={365}
-              className="inline-num-input"
-              value={staleDays}
-              onChange={(e) => setStaleDays(Number(e.target.value))}
-            />
-            <span>. After that: Dead.</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+        {/* Section: Thresholds */}
+        <div style={{ padding: '24px 0', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
+              Status thresholds
+            </strong>
+            <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+              Define when a repository transitions from active to cooling, stale, and dead.
+            </span>
           </div>
 
-          <button
-            type="submit"
-            className="btn-ink"
-            style={{ fontSize: '13px', padding: '6px 14px' }}
-            disabled={!hasThresholdsChanged || isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save thresholds'}
-          </button>
-        </div>
-      </form>
+          <form onSubmit={handleSaveThresholds}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '8px',
+              fontSize: '14px',
+              color: 'var(--ink)',
+              lineHeight: 2,
+              marginBottom: '16px',
+            }}>
+              <span>Active up to</span>
+              <input
+                id="active-days-input"
+                type="number"
+                min="1"
+                max="365"
+                value={activeDays}
+                onChange={(e) => setActiveDays(parseInt(e.target.value, 10) || 0)}
+                style={{
+                  width: '64px',
+                  padding: '4px 8px',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '14px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 'var(--r)',
+                  color: 'var(--ink)',
+                  textAlign: 'center',
+                }}
+              />
+              <span>days, Cooling up to</span>
+              <input
+                id="cooling-days-input"
+                type="number"
+                min="1"
+                max="365"
+                value={coolingDays}
+                onChange={(e) => setCoolingDays(parseInt(e.target.value, 10) || 0)}
+                style={{
+                  width: '64px',
+                  padding: '4px 8px',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '14px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 'var(--r)',
+                  color: 'var(--ink)',
+                  textAlign: 'center',
+                }}
+              />
+              <span>days, Stale up to</span>
+              <input
+                id="stale-days-input"
+                type="number"
+                min="1"
+                max="365"
+                value={staleDays}
+                onChange={(e) => setStaleDays(parseInt(e.target.value, 10) || 0)}
+                style={{
+                  width: '64px',
+                  padding: '4px 8px',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '14px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 'var(--r)',
+                  color: 'var(--ink)',
+                  textAlign: 'center',
+                }}
+              />
+              <span>days. After that: <strong>Dead</strong>.</span>
+            </div>
 
-      {/* Row 2: GitHub Account Connection */}
-      <div className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label">GitHub Account Connection</div>
-          <div className="settings-desc">
-            {installation.connected
-              ? `Connected to GitHub ${installation.account_login ? `(@${installation.account_login})` : ''}. Repositories are automatically synchronized.`
-              : 'Link your GitHub account or connect a Personal Access Token to sync your repositories and commit activity.'}
+            {thresholdError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--heat-active)', marginBottom: '12px' }}>
+                <AlertCircle size={15} strokeWidth={1.75} />
+                <span>{thresholdError}</span>
+              </div>
+            )}
+
+            {thresholdSuccess && (
+              <div style={{ fontSize: '13px', color: 'var(--heat-cooling)', marginBottom: '12px' }}>
+                Thresholds saved successfully.
+              </div>
+            )}
+
+            <button
+              id="save-thresholds-btn"
+              type="submit"
+              className="btn-primary"
+              disabled={!hasThresholdsChanged || isSaving}
+              style={{ fontSize: '13px', padding: '6px 16px' }}
+            >
+              {isSaving ? 'Saving...' : 'Save thresholds'}
+            </button>
+          </form>
+        </div>
+
+        {/* Section: Theme */}
+        <div style={{ padding: '24px 0', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
+              Interface theme
+            </strong>
+            <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+              Follow system appearance or force a specific mode.
+            </span>
           </div>
-          {tokenMessage && (
-            <div style={{ color: 'var(--heat-cooling)', fontSize: '13px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Check size={14} /> {tokenMessage}
-            </div>
-          )}
-          {tokenError && (
-            <div style={{ color: 'var(--heat-active)', fontSize: '13px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <AlertCircle size={14} /> {tokenError}
-            </div>
-          )}
-        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-          {installation.connected ? (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <a
-                href="https://github.com/settings/installations"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-outline"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', textDecoration: 'none' }}
+          <div style={{
+            display: 'inline-flex',
+            backgroundColor: 'var(--surface-2)',
+            padding: '2px',
+            borderRadius: 'var(--r)',
+            border: '1px solid var(--line)',
+          }}>
+            {(['system', 'light', 'dark'] as ThemeChoice[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleThemeChange(t)}
+                style={{
+                  padding: '4px 14px',
+                  fontSize: '13px',
+                  fontWeight: theme === t ? 600 : 400,
+                  backgroundColor: theme === t ? 'var(--surface)' : 'transparent',
+                  color: theme === t ? 'var(--ink)' : 'var(--ink-2)',
+                  border: 'none',
+                  borderRadius: 'var(--r)',
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                  transition: 'var(--transition)',
+                }}
               >
-                <span>Manage on GitHub</span>
-                <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
-              </a>
-              {onDisconnectGitHub && (
-                <button
-                  type="button"
-                  className="btn-quiet"
-                  onClick={handleDisconnect}
-                  style={{ color: 'var(--heat-active)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}
-                  title="Disconnect GitHub account"
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Repository access (W2) */}
+        <div style={{ padding: '24px 0', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
+              Repository access
+            </strong>
+            <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+              GitHub App installations and account permissions.
+            </span>
+          </div>
+
+          {effectiveInstallations.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {effectiveInstallations.map((inst, idx) => (
+                <div
+                  key={inst.id || idx}
+                  style={{
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r)',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
                 >
-                  <Unlink size={14} /> Disconnect
-                </button>
-              )}
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '2px' }}>
+                      {inst.account_login}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
+                      {inst.selection === 'all' ? 'All repositories' : `Only ${inst.repo_count || 0} selected`}
+                      {inst.private_repo_count > 0 && ` (${inst.private_repo_count} private)`}
+                    </div>
+                  </div>
+
+                  <a
+                    href={`https://github.com/settings/installations/${inst.github_installation_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '12px',
+                      color: 'var(--ink)',
+                      textDecoration: 'none',
+                      padding: '4px 10px',
+                      border: '1px solid var(--line)',
+                      borderRadius: 'var(--r)',
+                      backgroundColor: 'var(--surface)',
+                    }}
+                  >
+                    Manage on GitHub
+                    <ExternalLink size={13} strokeWidth={1.75} />
+                  </a>
+                </div>
+              ))}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {onGithubLogin && (
-                  <button
-                    type="button"
-                    className="btn-ink"
-                    onClick={onGithubLogin}
-                    style={{ fontSize: '13px', padding: '6px 14px' }}
-                  >
-                    Connect via GitHub OAuth
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => setShowTokenInput(!showTokenInput)}
-                  style={{ fontSize: '13px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Key size={14} />
-                  <span>{showTokenInput ? 'Cancel' : 'Connect Personal Access Token'}</span>
-                </button>
-              </div>
-
-              {showTokenInput && (
-                <form onSubmit={handleTokenSubmit} style={{ display: 'flex', gap: '6px', width: '100%', maxWidth: '380px', marginTop: '4px' }}>
-                  <input
-                    type="password"
-                    placeholder="ghp_... (read:user, repo:read)"
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
-                    className="inline-num-input"
-                    style={{ flex: 1, padding: '6px 10px', width: 'auto', textAlign: 'left', fontFamily: 'var(--mono)', fontSize: '12px' }}
-                    required
-                  />
-                  <button
-                    type="submit"
-                    className="btn-ink"
-                    disabled={isConnectingToken || !githubToken.trim()}
-                    style={{ fontSize: '12px', padding: '6px 12px', whiteSpace: 'nowrap' }}
-                  >
-                    {isConnectingToken ? 'Verifying...' : 'Save & Sync'}
-                  </button>
-                </form>
-              )}
+            <div style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+              No installations active. Install the GitHub App on your account.
             </div>
           )}
         </div>
-      </div>
 
-      {/* Row 3: Appearance Theme */}
-      <div className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label">Appearance Theme</div>
-          <div className="settings-desc">
-            Select light, dark, or follow your operating system default.
+        {/* Section: Danger zone */}
+        <div style={{ padding: '24px 0' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
+              Danger zone
+            </strong>
+            <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+              Export your data or permanently delete your account.
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              id="export-data-btn"
+              type="button"
+              className="btn-secondary"
+              onClick={onExportData}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+            >
+              <Download size={15} strokeWidth={1.75} />
+              Export data (JSON)
+            </button>
+
+            <button
+              id="delete-account-btn"
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '13px',
+                padding: '6px 14px',
+                backgroundColor: 'transparent',
+                border: '1px solid var(--heat-active)',
+                color: 'var(--heat-active)',
+                borderRadius: 'var(--r)',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={15} strokeWidth={1.75} />
+              Delete account
+            </button>
           </div>
         </div>
-
-        <div className="segmented-control" role="group" aria-label="Theme selection">
-          <button
-            type="button"
-            className={`segmented-btn ${theme === 'system' ? 'active' : ''}`}
-            onClick={() => handleThemeChange('system')}
-          >
-            System
-          </button>
-          <button
-            type="button"
-            className={`segmented-btn ${theme === 'light' ? 'active' : ''}`}
-            onClick={() => handleThemeChange('light')}
-          >
-            Light
-          </button>
-          <button
-            type="button"
-            className={`segmented-btn ${theme === 'dark' ? 'active' : ''}`}
-            onClick={() => handleThemeChange('dark')}
-          >
-            Dark
-          </button>
-        </div>
       </div>
 
-      {/* Row 4: Data Export */}
-      <div className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label">Data Portability</div>
-          <div className="settings-desc">
-            Download your full repository activity ledger, custom labels, notes, decisions, and audit trails as JSON.
-          </div>
-        </div>
-
-        <button type="button" className="btn-outline" onClick={onExportData}>
-          Export all data (JSON)
-        </button>
-      </div>
-
-      {/* Row 5: Delete Account */}
-      <div className="settings-row">
-        <div className="settings-meta">
-          <div className="settings-label" style={{ color: 'var(--heat-active)' }}>
-            Delete Account
-          </div>
-          <div className="settings-desc">
-            Permanently delete your account, session data, and all repository records.
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="btn-ember-outline"
-          onClick={() => setShowDeleteModal(true)}
-        >
-          Delete account
-        </button>
-      </div>
-
-      {/* Delete Confirmation Modal */}
+      {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
-        <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
-          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--heat-active)', marginBottom: '8px' }}>
-              Confirm Account Deletion
-            </h2>
-            <p style={{ fontSize: '14px', marginBottom: '16px', lineHeight: 1.5 }}>
-              This will permanently delete all your stored repository records, activity strips, custom labels, notes, and sessions.
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)',
+            border: '1px solid var(--line)',
+            borderRadius: 'var(--r)',
+            padding: '24px',
+            maxWidth: '480px',
+            width: '90%',
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 12px 0', color: 'var(--ink)' }}>
+              Delete account permanently
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              This action cannot be undone. All your synchronized repositories, commit histories, metadata labels, triage decisions, and saved views will be permanently purged from PostgreSQL.
             </p>
-            <p style={{ fontSize: '13px', marginBottom: '12px' }}>
-              To confirm, type <strong style={{ fontFamily: 'var(--mono)' }}>delete</strong> below:
+            <p style={{ fontSize: '13px', color: 'var(--ink)', margin: '0 0 12px 0' }}>
+              Type <strong>DELETE</strong> below to confirm:
             </p>
-            <input
-              type="text"
-              className="clean-input"
-              style={{ marginBottom: '16px' }}
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Type 'delete' to confirm"
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setShowDeleteModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-ember-outline"
-                disabled={deleteConfirmText.toLowerCase() !== 'delete' || isDeleting}
-                onClick={handleDelete}
-              >
-                {isDeleting ? 'Deleting...' : 'Permanently delete account'}
-              </button>
-            </div>
+
+            <form onSubmit={handleDeleteAccountSubmit}>
+              <input
+                id="delete-confirm-input"
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '14px',
+                  backgroundColor: 'var(--paper)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 'var(--r)',
+                  color: 'var(--ink)',
+                  marginBottom: '16px',
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteConfirmText('');
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  id="confirm-delete-btn"
+                  type="submit"
+                  disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                  style={{
+                    backgroundColor: 'var(--heat-active)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: 'var(--r)',
+                    padding: '6px 16px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: deleteConfirmText === 'DELETE' && !isDeleting ? 'pointer' : 'not-allowed',
+                    opacity: deleteConfirmText === 'DELETE' && !isDeleting ? 1 : 0.5,
+                  }}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete permanently'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
