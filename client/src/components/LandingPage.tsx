@@ -6,8 +6,10 @@ import {
   Check,
   Minus,
   ExternalLink,
-  Keyboard,
-  Share2,
+  Users,
+  Calendar,
+  Flame,
+  GitCommit,
   AlertCircle,
   HelpCircle,
 } from 'lucide-react';
@@ -34,6 +36,7 @@ interface LandingPageProps {
   onGithubLogin: () => void;
   onDevLogin?: () => Promise<void>;
   devEnabled?: boolean;
+  onNavigateLegal?: (type: 'privacy' | 'terms') => void;
 }
 
 interface SampleRepo {
@@ -105,6 +108,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onGithubLogin,
   onDevLogin,
   devEnabled = false,
+  onNavigateLegal,
 }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -179,7 +183,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={onGithubLogin}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
-              <Github size={16} strokeWidth={1.75} />
+              <GithubIcon size={16} />
               Sign in with GitHub
             </button>
           </div>
@@ -248,7 +252,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   gap: '10px',
                 }}
               >
-                <Github size={18} strokeWidth={1.75} />
+                <GithubIcon size={18} />
                 Sign in with GitHub
               </button>
               <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginTop: '8px' }}>
@@ -274,65 +278,70 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Hero Visual: Component Preview */}
-          <div style={{
-            backgroundColor: 'var(--surface)',
-            border: '1px solid var(--line)',
-            borderRadius: 'var(--r)',
-            padding: '20px',
-            boxShadow: 'none',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
-                Repository ledger
-              </span>
-              <span style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
-                Sample data
-              </span>
-            </div>
-
-            {/* Heat bar snippet */}
+          <div>
             <div style={{
-              display: 'flex',
-              height: '8px',
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--line)',
               borderRadius: 'var(--r)',
-              overflow: 'hidden',
-              marginBottom: '16px',
+              padding: '20px',
+              boxShadow: 'none',
             }}>
-              <div style={{ width: '35%', backgroundColor: 'var(--heat-active)' }} />
-              <div style={{ width: '25%', backgroundColor: 'var(--heat-cooling)' }} />
-              <div style={{ width: '25%', backgroundColor: 'var(--heat-stale)' }} />
-              <div style={{ width: '15%', backgroundColor: 'var(--heat-dead)' }} />
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
+                  Repository ledger
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
+                  Sample data
+                </span>
+              </div>
 
-            {/* Sample Rows */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', backgroundColor: 'var(--line)' }}>
-              {SAMPLE_REPOS.map((repo) => (
-                <div
-                  key={repo.name}
-                  style={{
-                    backgroundColor: 'var(--surface)',
-                    padding: '12px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>
-                        {repo.name}
-                      </span>
-                      {repo.is_private && <Lock size={12} strokeWidth={1.75} style={{ color: 'var(--ink-2)' }} />}
+              {/* Heat bar snippet */}
+              <div style={{
+                display: 'flex',
+                height: '8px',
+                borderRadius: 'var(--r)',
+                overflow: 'hidden',
+                marginBottom: '16px',
+              }}>
+                <div style={{ width: '35%', backgroundColor: 'var(--heat-active)' }} />
+                <div style={{ width: '25%', backgroundColor: 'var(--heat-cooling)' }} />
+                <div style={{ width: '25%', backgroundColor: 'var(--heat-stale)' }} />
+                <div style={{ width: '15%', backgroundColor: 'var(--heat-dead)' }} />
+              </div>
+
+              {/* Sample Rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', backgroundColor: 'var(--line)' }}>
+                {SAMPLE_REPOS.map((repo) => (
+                  <div
+                    key={repo.name}
+                    style={{
+                      backgroundColor: 'var(--surface)',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>
+                          {repo.name}
+                        </span>
+                        {repo.is_private && <Lock size={12} strokeWidth={1.75} style={{ color: 'var(--ink-2)' }} />}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
+                        {repo.meta}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
-                      {repo.meta}
+                    <div style={{ width: '160px' }}>
+                      <CommitStrip activity={repo.activity} status={repo.status} />
                     </div>
                   </div>
-                  <div style={{ width: '160px' }}>
-                    <CommitStrip activity={repo.activity} status={repo.status} />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--ink-2)', textAlign: 'center', marginTop: '8px' }}>
+              Live 90-day activity strips with instant health classification
             </div>
           </div>
         </div>
@@ -457,7 +466,136 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Section 3: Privacy & What we read */}
+      {/* Section 3: Private repos, organizations and teammates */}
+      <section style={{
+        borderTop: '1px solid var(--line)',
+        backgroundColor: 'var(--surface)',
+        padding: '64px 24px',
+      }}>
+        <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 12px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
+            Private repos, organizations and teammates
+          </h2>
+          <p style={{ fontSize: '15px', color: 'var(--ink-2)', margin: '0 0 36px 0', maxWidth: '60ch' }}>
+            Full visibility across every repository you touch, with absolute control over access boundaries.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+            <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '24px', backgroundColor: 'var(--paper)' }}>
+              <Lock size={20} strokeWidth={1.75} style={{ color: 'var(--ink)', marginBottom: '12px' }} />
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 8px 0' }}>
+                Private by default
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5, margin: 0 }}>
+                Private repos are fully tracked on your dashboard but anonymized by default on any public share cards.
+              </p>
+            </div>
+
+            <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '24px', backgroundColor: 'var(--paper)' }}>
+              <Building2 size={20} strokeWidth={1.75} style={{ color: 'var(--ink)', marginBottom: '12px' }} />
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 8px 0' }}>
+                Multi-organization support
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5, margin: 0 }}>
+                Install across multiple GitHub organizations. Separate your personal projects from team commitments.
+              </p>
+            </div>
+
+            <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '24px', backgroundColor: 'var(--paper)' }}>
+              <Users size={20} strokeWidth={1.75} style={{ color: 'var(--ink)', marginBottom: '12px' }} />
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 8px 0' }}>
+                Team momentum tracking
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5, margin: 0 }}>
+                See your personal contribution share alongside total team commit velocity on collaborative repositories.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: Share cards */}
+      <section id="share-cards" style={{ padding: '64px 24px', borderTop: '1px solid var(--line)' }}>
+        <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 12px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
+            Customizable share cards
+          </h2>
+          <p style={{ fontSize: '15px', color: 'var(--ink-2)', margin: '0 0 36px 0', maxWidth: '60ch' }}>
+            Turn your commit streaks and repository momentum into clean, high-resolution SVG and PNG cards.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+            {/* Card Sample 1: Summary */}
+            <div style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--r)',
+              padding: '20px',
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                Summary template
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ink)', marginBottom: '16px' }}>
+                48 Commits · 6 Active repos
+              </div>
+              <div style={{ height: '8px', backgroundColor: 'var(--line)', borderRadius: '4px', overflow: 'hidden', marginBottom: '16px' }}>
+                <div style={{ width: '60%', height: '100%', backgroundColor: 'var(--heat-active)' }} />
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
+                1200 × 630 Link preview
+              </div>
+            </div>
+
+            {/* Card Sample 2: Streak */}
+            <div style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--r)',
+              padding: '20px',
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                Streak template
+              </div>
+              <div style={{ fontSize: '36px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ink)', margin: '8px 0' }}>
+                24 DAYS
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '16px' }}>
+                Current continuous daily streak
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
+                1080 × 1080 Square
+              </div>
+            </div>
+
+            {/* Card Sample 3: Achievements */}
+            <div style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--r)',
+              padding: '20px',
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                Milestones template
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '12px 0 16px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
+                  <Flame size={16} strokeWidth={1.75} style={{ color: 'var(--heat-active)' }} />
+                  <span>7-Day Momentum</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
+                  <GitCommit size={16} strokeWidth={1.75} style={{ color: 'var(--heat-active)' }} />
+                  <span>Century Velocity</span>
+                </div>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
+                1080 × 1350 Portrait
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 5: Privacy & What we read */}
       <section id="privacy-trust" style={{
         borderTop: '1px solid var(--line)',
         backgroundColor: 'var(--surface)',
@@ -501,7 +639,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Section 4: Questions */}
+      {/* Section 6: Questions */}
       <section style={{ padding: '64px 24px', borderTop: '1px solid var(--line)' }}>
         <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 32px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
@@ -544,6 +682,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
+      {/* Section 7: Final CTA Band */}
+      <section style={{
+        borderTop: '1px solid var(--line)',
+        backgroundColor: 'var(--surface)',
+        padding: '64px 24px',
+        textAlign: 'center',
+      }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 16px 0', color: 'var(--ink)' }}>
+            Take control of your repositories
+          </h2>
+          <p style={{ fontSize: '15px', color: 'var(--ink-2)', lineHeight: 1.6, margin: '0 0 28px 0' }}>
+            Connect with GitHub in seconds. No credit card, no passwords, and read-only least privilege permissions.
+          </p>
+          <button
+            id="bottom-signin-btn"
+            type="button"
+            className="btn-primary"
+            onClick={onGithubLogin}
+            style={{ fontSize: '15px', padding: '12px 24px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+          >
+            <GithubIcon size={18} />
+            Sign in with GitHub
+          </button>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer style={{
         borderTop: '1px solid var(--line)',
@@ -563,9 +728,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             RepoPulse · Built for developers
           </div>
           <div style={{ display: 'flex', gap: '20px' }}>
-            <a href="/privacy" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Privacy policy</a>
-            <a href="/terms" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Terms of service</a>
+            <button
+              type="button"
+              onClick={() => onNavigateLegal?.('privacy')}
+              style={{ background: 'none', border: 'none', color: 'var(--ink-2)', cursor: 'pointer', fontSize: '13px', padding: 0 }}
+            >
+              Privacy policy
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateLegal?.('terms')}
+              style={{ background: 'none', border: 'none', color: 'var(--ink-2)', cursor: 'pointer', fontSize: '13px', padding: 0 }}
+            >
+              Terms of service
+            </button>
             <a href="https://github.com" target="_blank" rel="noreferrer" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>GitHub</a>
+            <a href="mailto:support@repopulse.dev" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Contact</a>
           </div>
         </div>
       </footer>

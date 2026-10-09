@@ -19,6 +19,7 @@ import { RepoDetailModal } from './components/RepoDetailModal.js';
 import { LandingPage } from './components/LandingPage.js';
 import { WelcomeView } from './components/WelcomeView.js';
 import { ShareView } from './components/ShareView.js';
+import { LegalView } from './components/LegalViews.js';
 import { SkeletonRow, Toast, ErrorBanner } from './components/FeedbackComponents.js';
 
 interface UndoAction {
@@ -46,7 +47,13 @@ export const App: React.FC = () => {
   });
   const [selectedRepoForDetail, setSelectedRepoForDetail] = useState<Repository | null>(null);
   const [isWelcomeRoute, setIsWelcomeRoute] = useState<boolean>(() => window.location.pathname === '/welcome');
+  const [legalView, setLegalView] = useState<'privacy' | 'terms' | null>(() => {
+    if (window.location.pathname === '/privacy') return 'privacy';
+    if (window.location.pathname === '/terms') return 'terms';
+    return null;
+  });
   const [devEnabled, setDevEnabled] = useState<boolean>(false);
+
 
 
   const [isLoading, setIsLoading] = useState(true);
@@ -301,8 +308,20 @@ export const App: React.FC = () => {
     );
   }
 
-  // Unauthenticated Route Guard: Show clean Landing Page
+  // Unauthenticated Route Guard: Show clean Landing Page or Legal View
   if (!user) {
+    if (legalView) {
+      return (
+        <LegalView
+          type={legalView}
+          onBack={() => {
+            setLegalView(null);
+            window.history.pushState({}, '', '/');
+          }}
+        />
+      );
+    }
+
     return (
       <>
         {toastMessage && (
@@ -312,10 +331,15 @@ export const App: React.FC = () => {
           onGithubLogin={handleGithubLogin}
           onDevLogin={handleDevLogin}
           devEnabled={devEnabled}
+          onNavigateLegal={(type) => {
+            setLegalView(type);
+            window.history.pushState({}, '', `/${type}`);
+          }}
         />
       </>
     );
   }
+
 
   // First-time Onboarding View at /welcome
   if (isWelcomeRoute) {
