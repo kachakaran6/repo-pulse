@@ -227,3 +227,39 @@ export async function revokeSnapshot(slug: string): Promise<void> {
   }
 }
 
+export async function fetchSavedViews(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/repos/saved-views`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error('Failed to fetch saved views');
+  }
+  return res.json();
+}
+
+export async function createSavedView(name: string, query: any): Promise<any> {
+  const res = await fetch(`${API_BASE}/repos/saved-views`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({ name, query }),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to create saved view');
+  }
+  return res.json();
+}
+
+export async function deleteSavedView(id: string | number): Promise<void> {
+  const res = await fetch(`${API_BASE}/repos/saved-views/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error('Failed to delete saved view');
+  }
+}
+
+

@@ -327,8 +327,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
         </div>
 
+        {/* Section: Saved views management */}
+        <div style={{ padding: '24px 0', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
+              Saved views
+            </strong>
+            <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
+              Custom filter presets and repository ledger configurations.
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: 'var(--r)',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
+                  Needs decision
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
+                  Filters: Status (Cooling, Stale) · Sort: Newest commit
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--ink-2)', fontStyle: 'italic' }}>Default system view</span>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: 'var(--r)',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
+                  Private and stale
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
+                  Filters: Visibility (Private) · Status (Stale, Dead)
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--ink-2)', fontStyle: 'italic' }}>Default system view</span>
+            </div>
+          </div>
+        </div>
+
         {/* Section: Danger zone */}
         <div style={{ padding: '24px 0' }}>
+
           <div style={{ marginBottom: '16px' }}>
             <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
               Danger zone
