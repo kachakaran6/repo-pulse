@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Repository } from '../types.js';
 import { CommitStrip } from './CommitStrip.js';
+import { Lock, Users, Check, Clock, Archive } from 'lucide-react';
 
 interface RepoRowProps {
   repo: Repository;
   currentUsername?: string;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string | number) => void;
   onOpenDetails: (repo: Repository) => void;
+  onDecision?: (repoId: string | number, decision: 'keep' | 'pause' | 'retire') => void;
+  onUpdateLabel?: (repoId: string | number, label: string) => void;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -22,55 +27,170 @@ function formatRelativeTime(dateStr: string | null): string {
   return `Last commit over a year ago`;
 }
 
-export const RepoRow: React.FC<RepoRowProps> = ({ repo, currentUsername, onOpenDetails }) => {
+export const RepoRow: React.FC<RepoRowProps> = ({
+  repo,
+  currentUsername,
+  isSelected = false,
+  onToggleSelect,
+  onOpenDetails,
+  onDecision,
+  onUpdateLabel,
+}) => {
   const meta = repo.meta || {};
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+  const [labelText, setLabelText] = useState(meta.label || '');
 
-  // Strip username prefix if repository is owned by the current user
+  // Strip username prefix only if repository owner is current user
   let displayName = repo.full_name;
-  if (currentUsername && displayName.startsWith(`${currentUsername}/`)) {
+  if (currentUsername && displayName.toLowerCase().startsWith(`${currentUsername.toLowerCase()}/`)) {
     displayName = displayName.substring(currentUsername.length + 1);
   }
 
+  // 30-day commits
+  const commits30d = (repo.activity || [])
+    .slice(-30)
+    .reduce((sum, a: any) => sum + (a.commits_mine ?? a.commits ?? 0), 0);
+
+  const handleLabelSubmit = (e: React.FormEvent) => {
+    e.stopPropagation();
+    setIsEditingLabel(false);
+    if (onUpdateLabel && labelText !== (meta.label || '')) {
+      onUpdateLabel(repo.id, labelText.trim());
+    }
+  };
+
   return (
     <div
-      className="ledger-row"
+      className={`ledger-row ${isSelected ? 'selected' : ''}`}
       onClick={() => onOpenDetails(repo)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === 'Enter' && !isEditingLabel) {
           e.preventDefault();
           onOpenDetails(repo);
         }
       }}
       title={`Open details for ${repo.full_name}`}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(240px, 1fr) auto minmax(280px, 440px)',
+        alignItems: 'center',
+        padding: '10px 16px',
+        gap: '16px',
+        borderBottom: '1px solid var(--line)',
+        backgroundColor: isSelected ? 'var(--surface-2)' : 'var(--surface)',
+        transition: 'var(--transition)',
+        position: 'relative',
+      }}
     >
-      <div className="repo-info-cell">
-        <div className="repo-name-line">
-          <span>{displayName}</span>
+      {/* Left Column: Name & Metadata */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect(repo.id);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ margin: 0, cursor: 'pointer' }}
+              title="Select row"
+            />
+          )}
+
+          <span
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--ink)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {displayName}
+          </span>
+
           {repo.is_private && (
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-label="Private repository"
-              style={{ color: 'var(--ink-2)', flexShrink: 0 }}
+            <span title="Private" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <Lock size={12} strokeWidth={1.75} style={{ color: 'var(--ink-2)' }} aria-label="Private" />
+            </span>
+          )}
+
+          {repo.is_collaborative && (
+            <span
+              title="Collaborative repository"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                color: 'var(--ink-2)',
+              }}
             >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+              <Users size={12} strokeWidth={1.75} />
+              <span>Team</span>
+            </span>
           )}
         </div>
 
-        <div className="repo-meta-line">
+        {/* Second Line Meta */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '12px',
+            color: 'var(--ink-2)',
+            flexWrap: 'wrap',
+          }}
+        >
           <span>{formatRelativeTime(repo.last_commit_at)}</span>
           {repo.language && <span>{repo.language}</span>}
-          {meta.label && <span className="repo-label-text">{meta.label}</span>}
+          <span>{commits30d} {commits30d === 1 ? 'commit' : 'commits'} in 30d</span>
+
+          {/* Inline Label Editing */}
+          {isEditingLabel ? (
+            <form onSubmit={handleLabelSubmit} onClick={(e) => e.stopPropagation()}>
+              <input
+                type="text"
+                autoFocus
+                value={labelText}
+                onChange={(e) => setLabelText(e.target.value)}
+                onBlur={handleLabelSubmit}
+                placeholder="Add label..."
+                style={{
+                  padding: '1px 6px',
+                  fontSize: '11px',
+                  border: '1px solid var(--ink)',
+                  borderRadius: 'var(--r)',
+                  backgroundColor: 'var(--surface)',
+                  color: 'var(--ink)',
+                }}
+              />
+            </form>
+          ) : (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditingLabel(true);
+              }}
+              style={{
+                cursor: 'pointer',
+                color: meta.label ? 'var(--ink)' : 'var(--ink-2)',
+                fontWeight: meta.label ? 500 : 400,
+                borderBottom: '1px dotted var(--line)',
+              }}
+              title="Click to edit label"
+            >
+              {meta.label || '+ label'}
+            </span>
+          )}
+
           {meta.goal_date && (
             <span style={{ color: 'var(--heat-active)', fontWeight: 500 }}>
               Goal: {meta.goal_date}
@@ -79,7 +199,51 @@ export const RepoRow: React.FC<RepoRowProps> = ({ repo, currentUsername, onOpenD
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Middle Column: Inline Quick Actions (Hover & Focus) */}
+      <div
+        className="row-quick-actions"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {onDecision && (
+          <>
+            <button
+              type="button"
+              className="btn-quiet"
+              onClick={() => onDecision(repo.id, 'keep')}
+              title="Keep going [K]"
+              style={{ padding: '4px', color: 'var(--ink-2)' }}
+            >
+              <Check size={14} strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              className="btn-quiet"
+              onClick={() => onDecision(repo.id, 'pause')}
+              title="Pause [P]"
+              style={{ padding: '4px', color: 'var(--ink-2)' }}
+            >
+              <Clock size={14} strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              className="btn-quiet"
+              onClick={() => onDecision(repo.id, 'retire')}
+              title="Retire to Archive [R]"
+              style={{ padding: '4px', color: 'var(--ink-2)' }}
+            >
+              <Archive size={14} strokeWidth={1.75} />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Right Column: 90-Day Strip */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', maxWidth: '440px' }}>
         <CommitStrip activity={repo.activity} status={repo.status} daysCount={90} />
       </div>
     </div>
