@@ -80,6 +80,17 @@ export interface SummaryStats {
   weeklyCommits: number;
   committedReposThisWeek: number;
   wentColdCount: number;
+  summarySentence?: string;
+  longestStreak?: number;
+  currentStreak?: number;
+  mostActiveWeekday?: string;
+  revivedReposCount?: number;
+  decisionsMadeCount?: number;
+  totalCommits7d?: number;
+  totalCommits30d?: number;
+  totalCommits90d?: number;
+  languages?: { name: string; count: number; percentage: number }[];
+  weeklyVelocity?: { weekLabel: string; commits: number; weekStart: string }[];
 }
 
 export interface AnalyticsData {
