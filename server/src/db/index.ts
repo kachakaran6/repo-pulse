@@ -469,6 +469,19 @@ export const db = {
     });
   },
 
+  async removeMissingRepos(userId: string | number, activeGithubRepoIds: (string | number)[]) {
+    return withTenant(userId, async (client) => {
+      if (!activeGithubRepoIds || activeGithubRepoIds.length === 0) return 0;
+      const idsStr = activeGithubRepoIds.map((id) => String(id));
+      const res = await client.query(
+        `DELETE FROM repos
+         WHERE user_id = $1 AND github_repo_id != ALL($2::bigint[])`,
+        [String(userId), idsStr]
+      );
+      return res.rowCount ?? 0;
+    });
+  },
+
   // 5. GitHub App Installations (withTenant)
   async getInstallation(userId: string | number) {
     return withTenant(userId, async (client) => {
