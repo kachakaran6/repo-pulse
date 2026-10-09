@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
 import { db } from '../db/index.js';
-import { statusOf, explainStatus, generateSummarySentence, type SummaryStats } from '../core/status.js';
+import { statusOf, explainStatus } from '../core/status.js';
+import { computeUnifiedStats, type RepoWithActivity } from '../core/stats.js';
 
 export const reposRouter = Router();
 
@@ -11,7 +12,7 @@ reposRouter.use(requireAuth);
 
 /**
  * GET /api/repos
- * Returns authenticated user's repositories with computed status and activity strips
+ * Returns authenticated user's repositories with computed status, unified stats, and optional filtering/sorting
  */
 reposRouter.get('/', async (req, res) => {
   const userId = req.user!.id;
@@ -23,49 +24,63 @@ reposRouter.get('/', async (req, res) => {
   };
 
   const rawRepos = await db.getUserRepos(userId);
+  const statusChanges = await db.getRecentStatusChanges(userId, 7);
   const now = Date.now();
   const todayStr = new Date().toISOString().split('T')[0];
 
-  let weeklyCommits = 0;
-  let committedReposThisWeek = 0;
-  let wentColdCount = 0;
+  const unifiedStats = computeUnifiedStats(rawRepos as any, thresholds, statusChanges, now);
 
-  const enrichedRepos = rawRepos.map((r) => {
+  // Enrich raw repos with status and metadata flags
+  let enrichedRepos = rawRepos.map((r: any) => {
     const status = statusOf(r.last_commit_at, now, thresholds);
     const explanation = explainStatus(r.last_commit_at, now, thresholds);
 
-    // Calculate weekly commit activity
     const sevenDaysAgo = new Date(now - 7 * 864e5).toISOString().split('T')[0];
-    const recentCommits = r.activity
+    const recentCommits = (r.activity || [])
       .filter((a: any) => a.day >= sevenDaysAgo)
-      .reduce((sum: number, a: any) => sum + (a.commits || 0), 0);
+      .reduce((sum: number, a: any) => sum + (a.commits_mine ?? a.commits ?? 0), 0);
 
-    if (recentCommits > 0) {
-      weeklyCommits += recentCommits;
-      committedReposThisWeek++;
-    }
+    const totalCommits90d = (r.activity || [])
+      .reduce((sum: number, a: any) => sum + (a.commits_mine ?? a.commits ?? 0), 0);
+    const totalCommitsAll90d = (r.activity || [])
+      .reduce((sum: number, a: any) => sum + (a.commits_all ?? a.commits_mine ?? a.commits ?? 0), 0);
 
-    // A repository went cold if its last commit fell out of active range within the last 7 days
-    if (explanation.days !== null && explanation.days > thresholds.active && explanation.days <= thresholds.active + 7) {
-      wentColdCount++;
-    }
+    const mySharePercentage = totalCommitsAll90d > 0
+      ? Math.round((totalCommits90d / totalCommitsAll90d) * 100)
+      : 100;
 
-    // Check if repo is paused until a future date
     const meta = r.meta || {};
     const isPaused = meta.decision === 'pause' && meta.paused_until && meta.paused_until > todayStr;
     const isRetired = meta.decision === 'retire';
 
+    const isCollaborative =
+      r.owner_type === 'Organization' ||
+      r.relationship === 'organization' ||
+      r.relationship === 'collaborator' ||
+      (r.owner_login && r.owner_login !== req.user!.login);
+
     return {
       id: String(r.id),
       github_repo_id: String(r.github_repo_id),
+      installation_id: r.installation_id ? String(r.installation_id) : null,
       full_name: r.full_name,
-      is_private: r.is_private,
-      default_branch: r.default_branch,
+      is_private: Boolean(r.is_private),
+      is_fork: Boolean(r.is_fork),
+      is_archived: Boolean(r.is_archived || r.archived_on_github),
+      owner_login: r.owner_login || r.full_name.split('/')[0] || req.user!.login,
+      owner_type: r.owner_type || 'User',
+      relationship: r.relationship || 'owner',
+      permission: r.permission || 'admin',
+      default_branch: r.default_branch || 'main',
       last_commit_at: r.last_commit_at ? new Date(r.last_commit_at).toISOString() : null,
-      language: r.language,
-      archived_on_github: r.archived_on_github,
+      pushed_at: r.pushed_at ? new Date(r.pushed_at).toISOString() : null,
+      created_at_github: r.created_at_github ? new Date(r.created_at_github).toISOString() : null,
+      language: r.language || null,
+      archived_on_github: Boolean(r.archived_on_github),
       status,
       explanation,
+      is_collaborative: Boolean(isCollaborative),
+      my_share_percentage: mySharePercentage,
       meta: {
         label: meta.label || null,
         goal_date: meta.goal_date || null,
@@ -81,39 +96,178 @@ reposRouter.get('/', async (req, res) => {
     };
   });
 
-  const activeCount = enrichedRepos.filter((r) => r.status === 'active' && !r.is_retired).length;
-  const coolingCount = enrichedRepos.filter((r) => r.status === 'cooling' && !r.is_retired).length;
-  const staleCount = enrichedRepos.filter((r) => r.status === 'stale' && !r.is_retired).length;
-  const deadCount = enrichedRepos.filter((r) => r.status === 'dead' && !r.is_retired).length;
-  const retiredCount = enrichedRepos.filter((r) => r.is_retired).length;
+  // Query parameters for filtering and sorting
+  const {
+    view,
+    search,
+    status,
+    relationship,
+    visibility,
+    language,
+    label,
+    decision,
+    sort,
+  } = req.query as Record<string, string | undefined>;
 
-  const stats: SummaryStats = {
-    totalRepos: enrichedRepos.length,
-    activeCount,
-    coolingCount,
-    staleCount,
-    deadCount,
-    weeklyCommits,
-    committedReposThisWeek,
-    wentColdCount,
-  };
+  // 1. View filter (all, mine, shared, orgs)
+  if (view === 'mine') {
+    enrichedRepos = enrichedRepos.filter((r) => !r.is_collaborative);
+  } else if (view === 'shared') {
+    enrichedRepos = enrichedRepos.filter((r) => r.relationship === 'collaborator');
+  } else if (view === 'organizations') {
+    enrichedRepos = enrichedRepos.filter((r) => r.owner_type === 'Organization' || r.relationship === 'organization');
+  }
 
-  const summarySentence = generateSummarySentence(stats);
+  // 2. Search query filter
+  if (search && search.trim()) {
+    const q = search.toLowerCase().trim();
+    enrichedRepos = enrichedRepos.filter(
+      (r) =>
+        r.full_name.toLowerCase().includes(q) ||
+        (r.language && r.language.toLowerCase().includes(q)) ||
+        (r.meta.label && r.meta.label.toLowerCase().includes(q))
+    );
+  }
+
+  // 3. Status filter
+  if (status && status !== 'all') {
+    const statuses = status.split(',');
+    enrichedRepos = enrichedRepos.filter((r) => statuses.includes(r.status));
+  }
+
+  // 4. Relationship filter
+  if (relationship && relationship !== 'all') {
+    const rels = relationship.split(',');
+    enrichedRepos = enrichedRepos.filter((r) => rels.includes(r.relationship));
+  }
+
+  // 5. Visibility filter
+  if (visibility && visibility !== 'all') {
+    if (visibility === 'private') enrichedRepos = enrichedRepos.filter((r) => r.is_private);
+    else if (visibility === 'public') enrichedRepos = enrichedRepos.filter((r) => !r.is_private);
+  }
+
+  // 6. Language filter
+  if (language && language !== 'all') {
+    const langs = language.split(',');
+    enrichedRepos = enrichedRepos.filter((r) => r.language && langs.includes(r.language));
+  }
+
+  // 7. Decision filter
+  if (decision && decision !== 'all') {
+    if (decision === 'undecided') enrichedRepos = enrichedRepos.filter((r) => !r.meta.decision);
+    else enrichedRepos = enrichedRepos.filter((r) => r.meta.decision === decision);
+  }
+
+  // 8. Sorting
+  if (sort === 'last_commit_oldest') {
+    enrichedRepos.sort((a, b) => {
+      if (!a.last_commit_at) return 1;
+      if (!b.last_commit_at) return -1;
+      return new Date(a.last_commit_at).getTime() - new Date(b.last_commit_at).getTime();
+    });
+  } else if (sort === 'commits_30d') {
+    enrichedRepos.sort((a, b) => {
+      const aCommits = a.activity.slice(-30).reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
+      const bCommits = b.activity.slice(-30).reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
+      return bCommits - aCommits;
+    });
+  } else if (sort === 'commits_90d') {
+    enrichedRepos.sort((a, b) => {
+      const aCommits = a.activity.reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
+      const bCommits = b.activity.reduce((s, x) => s + (x.commits_mine || x.commits || 0), 0);
+      return bCommits - aCommits;
+    });
+  } else if (sort === 'name') {
+    enrichedRepos.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  } else if (sort === 'created') {
+    enrichedRepos.sort((a, b) => {
+      if (!a.created_at_github) return 1;
+      if (!b.created_at_github) return -1;
+      return new Date(b.created_at_github).getTime() - new Date(a.created_at_github).getTime();
+    });
+  } else {
+    // Default: status priority, then recency
+    const statusWeight: Record<string, number> = { active: 1, cooling: 2, stale: 3, dead: 4 };
+    enrichedRepos.sort((a, b) => {
+      const wA = statusWeight[a.status] || 5;
+      const wB = statusWeight[b.status] || 5;
+      if (wA !== wB) return wA - wB;
+      if (!a.last_commit_at) return 1;
+      if (!b.last_commit_at) return -1;
+      return new Date(b.last_commit_at).getTime() - new Date(a.last_commit_at).getTime();
+    });
+  }
 
   res.json({
     repos: enrichedRepos,
-    summary: summarySentence,
-    stats: {
-      ...stats,
-      retiredCount,
-    },
+    summary: unifiedStats.summarySentence,
+    stats: unifiedStats,
     thresholds,
   });
 });
 
 /**
+ * GET /api/facets
+ * Returns multi-select facet counts for all filter options
+ */
+reposRouter.get('/facets', async (req, res) => {
+  const userId = req.user!.id;
+  const userSettings = await db.getSettings(userId);
+  const thresholds = {
+    active: userSettings.active_days,
+    cooling: userSettings.cooling_days,
+    stale: userSettings.stale_days,
+  };
+
+  const rawRepos = await db.getUserRepos(userId);
+  const now = Date.now();
+
+  const facetCounts = {
+    status: { active: 0, cooling: 0, stale: 0, dead: 0 },
+    relationship: { owner: 0, organization: 0, collaborator: 0, fork: 0 },
+    visibility: { public: 0, private: 0 },
+    languages: {} as Record<string, number>,
+    decision: { undecided: 0, keep: 0, pause: 0, retire: 0 },
+  };
+
+  for (const r of rawRepos) {
+    const status = statusOf(r.last_commit_at, now, thresholds);
+    facetCounts.status[status] = (facetCounts.status[status] || 0) + 1;
+
+    if (r.is_fork) facetCounts.relationship.fork++;
+    else if (r.relationship === 'organization' || r.owner_type === 'Organization') facetCounts.relationship.organization++;
+    else if (r.relationship === 'collaborator') facetCounts.relationship.collaborator++;
+    else facetCounts.relationship.owner++;
+
+    if (r.is_private) facetCounts.visibility.private++;
+    else facetCounts.visibility.public++;
+
+    if (r.language) {
+      facetCounts.languages[r.language] = (facetCounts.languages[r.language] || 0) + 1;
+    }
+
+    const dec = r.meta?.decision;
+    if (!dec) facetCounts.decision.undecided++;
+    else if (facetCounts.decision[dec] !== undefined) facetCounts.decision[dec]++;
+  }
+
+  res.json(facetCounts);
+});
+
+/**
+ * GET /api/installations
+ * Returns user's active GitHub App installations
+ */
+reposRouter.get('/installations', async (req, res) => {
+  const userId = req.user!.id;
+  const installations = await db.getInstallations(userId);
+  res.json(installations);
+});
+
+/**
  * GET /api/repos/analytics
- * Returns comprehensive repository portfolio statistics, language distribution, velocity, and health scores
+ * Returns comprehensive repository portfolio analytics computed via unified stats service
  */
 reposRouter.get('/analytics', async (req, res) => {
   const userId = req.user!.id;
@@ -125,184 +279,92 @@ reposRouter.get('/analytics', async (req, res) => {
   };
 
   const rawRepos = await db.getUserRepos(userId);
-  const now = Date.now();
-  const dayMs = 864e5;
+  const statusChanges = await db.getRecentStatusChanges(userId, 7);
+  const stats = computeUnifiedStats(rawRepos as any, thresholds, statusChanges);
 
-  let totalCommits7d = 0;
-  let totalCommits30d = 0;
-  let totalCommits90d = 0;
-  let privateCount = 0;
-  let publicCount = 0;
-  let archivedCount = 0;
+  res.json(stats);
+});
 
-  const languagesMap: Record<string, number> = {};
-  const globalDailyActivity: Record<string, number> = {};
+/**
+ * GET /api/saved-views
+ */
+reposRouter.get('/saved-views', async (req, res) => {
+  const userId = req.user!.id;
+  const views = await db.getSavedViews(userId);
+  res.json(views);
+});
 
-  for (let i = 89; i >= 0; i--) {
-    const d = new Date(now - i * dayMs).toISOString().split('T')[0];
-    globalDailyActivity[d] = 0;
+/**
+ * POST /api/saved-views
+ */
+reposRouter.post('/saved-views', async (req, res) => {
+  const userId = req.user!.id;
+  const { name, query } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ error: 'Name is required' });
+    return;
   }
+  const view = await db.createSavedView(userId, name.trim(), query || {});
+  res.json({ ok: true, view });
+});
 
-  let mostActiveRepo: any = null;
-  let maxRepoCommits90d = -1;
+/**
+ * DELETE /api/saved-views/:id
+ */
+reposRouter.delete('/saved-views/:id', async (req, res) => {
+  const userId = req.user!.id;
+  const success = await db.deleteSavedView(req.params.id, userId);
+  res.json({ ok: success });
+});
 
-  let oldestDormantRepo: any = null;
-  let maxDormantDays = -1;
+/**
+ * GET /api/achievements
+ */
+reposRouter.get('/achievements', async (req, res) => {
+  const userId = req.user!.id;
+  const achievements = await db.getAchievements(userId);
+  res.json(achievements);
+});
 
-  let activeCount = 0;
-  let coolingCount = 0;
-  let staleCount = 0;
-  let deadCount = 0;
-  let retiredCount = 0;
+/**
+ * GET /api/contributors/:repoId
+ */
+reposRouter.get('/contributors/:repoId', async (req, res) => {
+  const userId = req.user!.id;
+  const contribs = await db.getRepoContributors(req.params.repoId, userId);
+  res.json(contribs);
+});
 
-  const cutoff7d = new Date(now - 7 * dayMs).toISOString().split('T')[0];
-  const cutoff30d = new Date(now - 30 * dayMs).toISOString().split('T')[0];
-  const cutoff90d = new Date(now - 90 * dayMs).toISOString().split('T')[0];
-
-  for (const r of rawRepos) {
-    if (r.is_private) privateCount++;
-    else publicCount++;
-
-    if (r.archived_on_github) archivedCount++;
-
-    const status = statusOf(r.last_commit_at, now, thresholds);
-    const explanation = explainStatus(r.last_commit_at, now, thresholds);
-
-    const isRetired = r.meta?.decision === 'retire';
-    if (isRetired) {
-      retiredCount++;
-    } else {
-      if (status === 'active') activeCount++;
-      else if (status === 'cooling') coolingCount++;
-      else if (status === 'stale') staleCount++;
-      else deadCount++;
-    }
-
-    const lang = r.language || 'Other';
-    languagesMap[lang] = (languagesMap[lang] || 0) + 1;
-
-    let repo90dCommits = 0;
-    for (const act of r.activity || []) {
-      if (act.day >= cutoff90d) {
-        totalCommits90d += act.commits;
-        repo90dCommits += act.commits;
-        if (globalDailyActivity[act.day] !== undefined) {
-          globalDailyActivity[act.day] += act.commits;
-        }
-      }
-      if (act.day >= cutoff30d) {
-        totalCommits30d += act.commits;
-      }
-      if (act.day >= cutoff7d) {
-        totalCommits7d += act.commits;
-      }
-    }
-
-    if (repo90dCommits > maxRepoCommits90d) {
-      maxRepoCommits90d = repo90dCommits;
-      mostActiveRepo = {
-        id: String(r.id),
-        name: r.full_name,
-        commits_90d: repo90dCommits,
-        language: r.language,
-      };
-    }
-
-    if (explanation.days !== null && explanation.days > maxDormantDays) {
-      maxDormantDays = explanation.days;
-      oldestDormantRepo = {
-        id: String(r.id),
-        name: r.full_name,
-        days_inactive: explanation.days,
-        last_commit_at: r.last_commit_at ? new Date(r.last_commit_at).toISOString() : null,
-      };
-    }
-  }
-
-  const totalWithLang = rawRepos.length || 1;
-  const languages = Object.entries(languagesMap)
-    .map(([name, count]) => ({
-      name,
-      count,
-      percentage: Math.round((count / totalWithLang) * 100),
-    }))
-    .sort((a, b) => b.count - a.count);
-
-  const warmRatio = rawRepos.length > 0 ? (activeCount + coolingCount * 0.75) / rawRepos.length : 1;
-  const commitHealthBonus = Math.min(25, totalCommits7d * 2);
-  const healthScore = Math.min(100, Math.round(warmRatio * 75 + commitHealthBonus));
-
-  const dailyTrend = Object.entries(globalDailyActivity).map(([day, commits]) => ({ day, commits }));
-
-  res.json({
-    total_repos: rawRepos.length,
-    public_count: publicCount,
-    private_count: privateCount,
-    archived_count: archivedCount,
-    health_score: healthScore,
-    commits: {
-      past_7_days: totalCommits7d,
-      past_30_days: totalCommits30d,
-      past_90_days: totalCommits90d,
-      weekly_average: Math.round(totalCommits90d / 12),
-    },
-    heat_distribution: {
-      active: activeCount,
-      cooling: coolingCount,
-      stale: staleCount,
-      dead: deadCount,
-      retired: retiredCount,
-    },
-    languages,
-    most_active_repo: mostActiveRepo,
-    oldest_dormant_repo: oldestDormantRepo,
-    daily_trend: dailyTrend,
-  });
+const patchMetaSchema = z.object({
+  label: z.string().max(50).nullable().optional(),
+  goal_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  note: z.string().max(1000).nullable().optional(),
+  decision: z.enum(['keep', 'pause', 'retire']).nullable().optional(),
+  paused_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 
 /**
  * PATCH /api/repos/:id/meta
- * Updates custom label, goal date, note, or triage decision
+ * Updates custom metadata (labels, notes, triage decision, goal date)
  */
 reposRouter.patch('/:id/meta', async (req, res) => {
   const userId = req.user!.id;
   const repoId = req.params.id;
 
-  if (!repoId) {
-    res.status(400).json({ error: 'Invalid repository ID' });
-    return;
-  }
-
-  const schema = z.object({
-    label: z.string().nullable().optional(),
-    goal_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Goal date must be YYYY-MM-DD').nullable().optional(),
-    note: z.string().max(2000).nullable().optional(),
-    decision: z.enum(['keep', 'pause', 'retire']).nullable().optional(),
-    paused_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Paused until must be YYYY-MM-DD').nullable().optional(),
-  });
-
-  const parsed = schema.safeParse(req.body);
+  const parsed = patchMetaSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation Error', details: parsed.error.issues });
+    res.status(400).json({
+      error: 'Invalid Metadata',
+      details: parsed.error.format(),
+    });
     return;
   }
 
-  try {
-    const updatedMeta = await db.upsertRepoMeta(repoId, userId, parsed.data);
-    await db.logAudit(userId, 'repo_meta_updated', { repo_id: repoId, changes: parsed.data });
+  const updatedMeta = await db.upsertRepoMeta(repoId, userId, parsed.data);
+  await db.logAudit(userId, 'repo_meta_updated', { repo_id: repoId, updates: parsed.data });
 
-    res.json({
-      ok: true,
-      meta: {
-        label: updatedMeta.label || null,
-        goal_date: updatedMeta.goal_date || null,
-        note: updatedMeta.note || null,
-        decision: updatedMeta.decision || null,
-        paused_until: updatedMeta.paused_until || null,
-        decided_at: updatedMeta.decided_at ? new Date(updatedMeta.decided_at).toISOString() : null,
-      },
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Database Error', message: err.message });
-  }
+  res.json({
+    ok: true,
+    meta: updatedMeta,
+  });
 });

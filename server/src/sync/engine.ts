@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { env } from '../config/env.js';
 import { db } from '../db/index.js';
 import { logger } from '../utils/logger.js';
+import { statusOf, DEFAULT_THRESHOLDS } from '../core/status.js';
 
 export interface SyncResult {
   reposRead: number;
@@ -72,10 +73,15 @@ export const REPOS_GRAPHQL_QUERY = `
           databaseId
           nameWithOwner
           isPrivate
+          isFork
           isArchived
           pushedAt
           updatedAt
           createdAt
+          owner {
+            login
+            __typename
+          }
           primaryLanguage { name }
           defaultBranchRef {
             name
@@ -86,6 +92,11 @@ export const REPOS_GRAPHQL_QUERY = `
                   totalCount
                   nodes {
                     committedDate
+                    author {
+                      user {
+                        login
+                      }
+                    }
                   }
                 }
               }
@@ -113,9 +124,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
     const installation = await db.getInstallation(userId);
     const userGithubToken = (user as any).github_token as string | null | undefined;
 
-    // If live GitHub token or App installation token is available, execute live GitHub sync
     let reposSynced = 0;
-
     let activeToken: string | null = null;
     if (userGithubToken) {
       activeToken = userGithubToken;
@@ -128,19 +137,55 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
     }
 
     if (activeToken) {
+      // Step A: Discover user installations and update installation metadata
+      try {
+        const instRes = await fetch('https://api.github.com/user/installations', {
+          headers: {
+            'Authorization': `Bearer ${activeToken}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'RepoPulse-v2',
+          },
+        });
+
+        if (instRes.ok) {
+          const instData = (await instRes.json()) as any;
+          const installationsList = instData.installations || [];
+          for (const inst of installationsList) {
+            await db.upsertInstallation(userId, inst.id, inst.account?.login || user.login, {
+              account_type: inst.account?.type || 'User',
+              selection: inst.repository_selection || 'all',
+              repo_count: inst.repository_count || 0,
+              private_repo_count: 0,
+              public_repo_count: inst.repository_count || 0,
+            });
+          }
+        }
+      } catch (instErr: any) {
+        logger.warn({ error: instErr.message }, 'GitHub installations discovery notice');
+      }
+
       const syncedGithubRepoIds = new Set<string>();
       const repoMap = new Map<string, {
         github_repo_id: string;
         full_name: string;
         is_private: boolean;
+        is_fork: boolean;
+        is_archived: boolean;
+        owner_login: string;
+        owner_type: string;
+        relationship: string;
+        permission: string;
         default_branch: string;
         last_commit_at: Date | null;
+        pushed_at: Date | null;
+        created_at_github: Date | null;
         language: string | null;
         archived_on_github: boolean;
-        dailyCounts: Record<string, number>;
+        dailyCountsMine: Record<string, number>;
+        dailyCountsAll: Record<string, number>;
       }>();
 
-      // STEP 1: Fetch ALL user repositories via REST API pagination to guarantee 100% complete coverage (all repositories)
+      // Step B: REST API pagination to fetch all repositories
       try {
         let page = 1;
         let hasMorePages = true;
@@ -184,6 +229,24 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           for (const r of restRepos) {
             if (!r || !r.id) continue;
             const rId = String(r.id);
+            const ownerLogin = r.owner?.login || user.login;
+            const ownerType = r.owner?.type || 'User';
+
+            let relationship = 'owner';
+            if (ownerLogin.toLowerCase() === user.login.toLowerCase()) {
+              relationship = 'owner';
+            } else if (ownerType === 'Organization') {
+              relationship = 'organization';
+            } else {
+              relationship = 'collaborator';
+            }
+
+            const permission = r.permissions?.admin
+              ? 'admin'
+              : r.permissions?.push
+              ? 'write'
+              : 'read';
+
             const lastDate = r.pushed_at
               ? new Date(r.pushed_at)
               : r.updated_at
@@ -194,13 +257,22 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
 
             repoMap.set(rId, {
               github_repo_id: rId,
-              full_name: r.full_name || `${r.owner?.login || user.login}/${r.name}`,
+              full_name: r.full_name || `${ownerLogin}/${r.name}`,
               is_private: Boolean(r.private),
+              is_fork: Boolean(r.fork),
+              is_archived: Boolean(r.archived),
+              owner_login: ownerLogin,
+              owner_type: ownerType,
+              relationship,
+              permission,
               default_branch: r.default_branch || 'main',
               last_commit_at: lastDate,
+              pushed_at: r.pushed_at ? new Date(r.pushed_at) : null,
+              created_at_github: r.created_at ? new Date(r.created_at) : null,
               language: r.language || null,
               archived_on_github: Boolean(r.archived),
-              dailyCounts: {},
+              dailyCountsMine: {},
+              dailyCountsAll: {},
             });
             syncedGithubRepoIds.add(rId);
           }
@@ -212,10 +284,10 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           }
         }
       } catch (restErr: any) {
-        logger.warn({ error: restErr.message }, 'REST user/repos sync encountered error');
+        logger.warn({ error: restErr.message }, 'REST user/repos sync error');
       }
 
-      // STEP 2: Query GraphQL for 90-day daily commit history sparklines & commit timestamps
+      // Step C: GraphQL API for 90-day daily commit breakdown
       try {
         const now = new Date();
         const since90Days = new Date(now.getTime() - 90 * 864e5).toISOString();
@@ -242,7 +314,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           });
 
           if (!gqlRes.ok) {
-            logger.warn({ status: gqlRes.status }, 'GraphQL sync non-200 status, using REST dataset');
+            logger.warn({ status: gqlRes.status }, 'GraphQL sync non-200 status');
             break;
           }
 
@@ -263,31 +335,53 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
               : null;
 
             const existing = repoMap.get(rId);
-            const dailyCounts: Record<string, number> = {};
+            const dailyCountsMine: Record<string, number> = {};
+            const dailyCountsAll: Record<string, number> = {};
 
             const commitNodes = commitTarget?.history?.nodes || [];
             for (const c of commitNodes) {
               if (c?.committedDate) {
                 const dayStr = String(c.committedDate).split('T')[0];
-                dailyCounts[dayStr] = (dailyCounts[dayStr] || 0) + 1;
+                const authorLogin = c.author?.user?.login;
+                dailyCountsAll[dayStr] = (dailyCountsAll[dayStr] || 0) + 1;
+                if (!authorLogin || authorLogin.toLowerCase() === user.login.toLowerCase()) {
+                  dailyCountsMine[dayStr] = (dailyCountsMine[dayStr] || 0) + 1;
+                }
               }
             }
 
             if (existing) {
-              existing.dailyCounts = dailyCounts;
+              existing.dailyCountsMine = dailyCountsMine;
+              existing.dailyCountsAll = dailyCountsAll;
               if (commitDate && (!existing.last_commit_at || commitDate.getTime() > existing.last_commit_at.getTime())) {
                 existing.last_commit_at = commitDate;
               }
             } else {
+              const ownerLogin = node.owner?.login || user.login;
+              const ownerType = node.owner?.__typename || 'User';
+              let relationship = 'owner';
+              if (ownerLogin.toLowerCase() === user.login.toLowerCase()) relationship = 'owner';
+              else if (ownerType === 'Organization') relationship = 'organization';
+              else relationship = 'collaborator';
+
               repoMap.set(rId, {
                 github_repo_id: rId,
                 full_name: node.nameWithOwner,
                 is_private: Boolean(node.isPrivate),
+                is_fork: Boolean(node.isFork),
+                is_archived: Boolean(node.isArchived),
+                owner_login: ownerLogin,
+                owner_type: ownerType,
+                relationship,
+                permission: 'admin',
                 default_branch: node?.defaultBranchRef?.name || 'main',
                 last_commit_at: commitDate,
+                pushed_at: node.pushedAt ? new Date(node.pushedAt) : null,
+                created_at_github: node.createdAt ? new Date(node.createdAt) : null,
                 language: node?.primaryLanguage?.name || null,
                 archived_on_github: Boolean(node.isArchived),
-                dailyCounts,
+                dailyCountsMine,
+                dailyCountsAll,
               });
             }
           }
@@ -296,10 +390,18 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           afterCursor = pageInfo?.endCursor || null;
         }
       } catch (gqlErr: any) {
-        logger.warn({ error: gqlErr.message }, 'GraphQL commit history fetch error');
+        logger.warn({ error: gqlErr.message }, 'GraphQL commit history fetch notice');
       }
 
-      // STEP 3: Upsert all real repositories and their commit activity into database
+      // Step D: Get previous repos to detect status changes
+      const previousRepos = await db.getUserRepos(userId);
+      const prevStatusMap = new Map<string, string>();
+      for (const pr of previousRepos) {
+        const st = statusOf(pr.last_commit_at, Date.now(), DEFAULT_THRESHOLDS);
+        prevStatusMap.set(String(pr.github_repo_id), st);
+      }
+
+      // Step E: Upsert all real repositories and their commit activity into database
       for (const repoData of repoMap.values()) {
         const repo = await db.upsertRepo({
           user_id: userId,
@@ -307,20 +409,42 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           github_repo_id: repoData.github_repo_id,
           full_name: repoData.full_name,
           is_private: repoData.is_private,
+          is_fork: repoData.is_fork,
+          is_archived: repoData.is_archived,
+          owner_login: repoData.owner_login,
+          owner_type: repoData.owner_type,
+          relationship: repoData.relationship,
+          permission: repoData.permission,
           default_branch: repoData.default_branch,
           last_commit_at: repoData.last_commit_at,
+          pushed_at: repoData.pushed_at,
+          created_at_github: repoData.created_at_github,
           language: repoData.language,
           archived_on_github: repoData.archived_on_github,
         });
 
-        for (const [day, count] of Object.entries(repoData.dailyCounts)) {
-          await db.upsertActivity(repo.id, userId, day, count);
+        // Check if status changed
+        const currentStatus = statusOf(repoData.last_commit_at, Date.now(), DEFAULT_THRESHOLDS);
+        const prevStatus = prevStatusMap.get(repoData.github_repo_id);
+        if (prevStatus && prevStatus !== currentStatus) {
+          await db.recordStatusChange(repo.id, userId, currentStatus);
+        }
+
+        // Upsert 90 days activity
+        const allDays = new Set([
+          ...Object.keys(repoData.dailyCountsMine),
+          ...Object.keys(repoData.dailyCountsAll),
+        ]);
+        for (const day of allDays) {
+          const mine = repoData.dailyCountsMine[day] || 0;
+          const all = repoData.dailyCountsAll[day] || mine;
+          await db.upsertActivity(repo.id, userId, day, mine, all);
         }
 
         reposSynced++;
       }
 
-      // STEP 4: Clean up any mock repos (e.g. fake auth-shield, fake repopulse) or deleted repos
+      // Step F: Purge missing/stale repositories
       if (syncedGithubRepoIds.size > 0) {
         const removedCount = await db.removeMissingRepos(userId, Array.from(syncedGithubRepoIds));
         if (removedCount > 0) {
@@ -329,7 +453,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
       }
     }
 
-    // Only generate mock dataset for dedicated demo/dev exploration when NO GitHub token is present
+    // Dev environment mock dataset generation
     if (reposSynced === 0 && (user.login === 'demo-user' || user.login === 'dev-user') && !activeToken) {
       const generatedRepos = generateRealisticDataset(userId, user.login);
       for (const repoData of generatedRepos) {
@@ -339,15 +463,20 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           github_repo_id: repoData.github_repo_id,
           full_name: repoData.full_name,
           is_private: repoData.is_private,
+          is_fork: false,
+          is_archived: repoData.archived_on_github,
+          owner_login: user.login,
+          owner_type: 'User',
+          relationship: 'owner',
+          permission: 'admin',
           default_branch: repoData.default_branch,
           last_commit_at: repoData.last_commit_at,
           language: repoData.language,
           archived_on_github: repoData.archived_on_github,
         });
 
-        // Upsert activity history (never touches repo_meta!)
         for (const act of repoData.activity) {
-          await db.upsertActivity(repo.id, userId, act.day, act.commits);
+          await db.upsertActivity(repo.id, userId, act.day, act.commits, act.commits);
         }
 
         reposSynced++;
