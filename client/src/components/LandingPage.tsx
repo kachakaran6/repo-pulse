@@ -154,7 +154,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
             <span style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.02em', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: 'var(--r-pill)', backgroundColor: 'var(--heat-active)' }} />
+              <img src="/repopulse-mark.svg" alt="" width={24} height={24} style={{ display: 'block', flexShrink: 0 }} />
               RepoPulse
             </span>
             <nav style={{ display: 'flex', gap: '24px' }}>
