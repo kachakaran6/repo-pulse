@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">RepoPulse</title>
+  <rect width="64" height="64" rx="14" fill="#14181B"/>
+  <path d="M21 49V15h14.5C45 15 50 20 50 28c0 7-4.3 11.2-11.8 12.2L50 49H38.8L29 40.2h-0.2V49Z" fill="#F2F3F1"/>
+  <path d="M13 34h9l4.5-8 7 16 6.5-12 4 4H52" fill="none" stroke="#F2664F" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
