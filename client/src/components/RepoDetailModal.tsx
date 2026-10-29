@@ -23,7 +23,7 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({
 
   // Fetch contributors if collaborative
   useEffect(() => {
-    fetch(`/api/contributors/${repo.id}`, {
+    fetch(`/api/repos/contributors/${repo.id}`, {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
     })
