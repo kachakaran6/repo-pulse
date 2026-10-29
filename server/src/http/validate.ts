@@ -62,7 +62,10 @@ const routeId = z.string().min(1).max(200);
 
 const webhookPayload = z.object({}).passthrough();
 
-export function parseSavedViewBody(req: Request, res: Response): z.infer<typeof savedViewBody> | undefined {
+export function parseSavedViewBody(
+  req: Request,
+  res: Response,
+): z.infer<typeof savedViewBody> | undefined {
   const parsed = savedViewBody.safeParse(req.body ?? {});
   if (!parsed.success) {
     sendError(res, 400, 'Name is required', 'Name is required', parsed.error.issues);
@@ -71,7 +74,10 @@ export function parseSavedViewBody(req: Request, res: Response): z.infer<typeof 
   return parsed.data;
 }
 
-export function parseSyncQuery(req: Request, res: Response): { force?: string; wait?: string } | undefined {
+export function parseSyncQuery(
+  req: Request,
+  res: Response,
+): { force?: string; wait?: string } | undefined {
   const parsed = syncQuery.safeParse({
     force: req.query.force,
     wait: req.query.wait,

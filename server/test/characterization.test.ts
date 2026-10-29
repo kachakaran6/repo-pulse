@@ -35,7 +35,9 @@ function auth(cookies: string | string[]) {
 
 describe('characterization: ledger core flows', () => {
   it('fetches repos, groups them by activity, and overwrites a verdict', async () => {
-    const login = await request(app).post('/auth/dev-login').set('X-Requested-With', 'XMLHttpRequest');
+    const login = await request(app)
+      .post('/auth/dev-login')
+      .set('X-Requested-With', 'XMLHttpRequest');
     expect(login.status).toBe(200);
     const cookies = login.headers['set-cookie'];
     expect(cookies).toBeDefined();
@@ -88,7 +90,9 @@ describe('characterization: ledger core flows', () => {
     expect(retired.body.meta.decision).toBe('retire');
 
     const afterRetire = await request(app).get('/api/repos').set(auth(cookies!));
-    const retiredRow = (afterRetire.body.repos as LedgerRepo[]).find((repo) => repo.id === target.id);
+    const retiredRow = (afterRetire.body.repos as LedgerRepo[]).find(
+      (repo) => repo.id === target.id,
+    );
     expect(retiredRow?.meta.decision).toBe('retire');
     expect(retiredRow?.is_retired).toBe(true);
 

@@ -53,10 +53,9 @@ export function groupByActivity<T extends { status: ActivityStatus }>(
  * Default ledger order: heat status, then newer commits first.
  * Matches GET /api/repos when `sort` is omitted.
  */
-export function compareByActivity<T extends { status: ActivityStatus; last_commit_at: string | null }>(
-  a: T,
-  b: T,
-): number {
+export function compareByActivity<
+  T extends { status: ActivityStatus; last_commit_at: string | null },
+>(a: T, b: T): number {
   const weight = (STATUS_ORDER[a.status] || 5) - (STATUS_ORDER[b.status] || 5);
   if (weight !== 0) return weight;
   if (!a.last_commit_at) return 1;
