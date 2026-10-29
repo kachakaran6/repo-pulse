@@ -146,8 +146,8 @@ export const ShareView: React.FC<ShareViewProps> = ({
       periodCommits = totalCommits90d || totalCommits30d || 0;
       periodLabel = 'Commits (90d)';
     } else if (period === 'year') {
-      periodCommits = (totalCommits90d || totalCommits30d || 0) * 4;
-      periodLabel = 'Commits (Past Year)';
+      periodCommits = Math.round((totalCommits90d || totalCommits30d || 0) * (365 / 90));
+      periodLabel = 'Estimated commits (year)';
     }
 
     return {
