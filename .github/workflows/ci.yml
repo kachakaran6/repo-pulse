@@ -40,7 +40,11 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install workspace dependencies
-        run: npm ci
+        run: |
+          npm ci
+          # npm can omit Rollup's platform binary from a lockfile generated on a
+          # different OS (npm/cli#4828). Install the Linux CI binary explicitly.
+          npm install --no-save --package-lock=false @rollup/rollup-linux-x64-gnu@4.66.0
 
       - name: Lint
         run: npm run lint
