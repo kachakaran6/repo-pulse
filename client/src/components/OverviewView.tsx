@@ -389,7 +389,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const totalPoolCount = activePool.length || 1;
 
   return (
-    <div className="pb-16">
+    <div className="overview-page pb-16">
       {/* 1. Top Summary Sentence & Action Row */}
       <div style={{ marginBottom: '24px' }}>
         <h1

@@ -87,7 +87,7 @@ export const App: React.FC = () => {
     const isDark =
       settings.theme === 'dark' ||
       (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if (meta) meta.setAttribute('content', isDark ? '#131413' : '#F2F3F1');
+    if (meta) meta.setAttribute('content', isDark ? '#101827' : '#f5f7fb');
   }, [settings.theme]);
 
   // Check auth status for dev mode
