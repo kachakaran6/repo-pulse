@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { destroyAllUserSessions } from '../auth/session.js';
 import { thresholdsSchema } from '../core/status.js';
 import { logger } from '../utils/logger.js';
+import { sendError } from '../http/errors.js';
 
 export const settingsRouter = Router();
 
@@ -20,7 +21,7 @@ settingsRouter.get('/me', async (req, res) => {
   const user = await db.findUserById(userId);
 
   if (!user) {
-    res.status(401).json({ error: 'Unauthorized', message: 'User not found' });
+    sendError(res, 401, 'Unauthorized', 'User not found');
     return;
   }
 
@@ -89,7 +90,7 @@ settingsRouter.patch('/settings', async (req, res) => {
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation Error', details: parsed.error.issues });
+    sendError(res, 400, 'Validation Error', 'Request failed validation.', parsed.error.issues);
     return;
   }
 
@@ -106,11 +107,13 @@ settingsRouter.patch('/settings', async (req, res) => {
   });
 
   if (!thresholdValidation.success) {
-    res.status(400).json({
-      error: 'Threshold Error',
-      message: 'Thresholds must be strictly ascending: Active < Cooling < Stale',
-      details: thresholdValidation.error.issues,
-    });
+    sendError(
+      res,
+      400,
+      'Threshold Error',
+      'Thresholds must be strictly ascending: Active < Cooling < Stale',
+      thresholdValidation.error.issues,
+    );
     return;
   }
 

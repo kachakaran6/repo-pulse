@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { validateSession } from './session.js';
 import { db } from '../db/index.js';
 import { env } from '../config/env.js';
+import { sendError } from '../http/errors.js';
 
 export interface AuthenticatedUser {
   id: string;
@@ -28,19 +29,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'];
 
   if (!token || typeof token !== 'string') {
-    res.status(401).json({ error: 'Unauthorized', message: 'Authentication required. Please sign in.' });
+    sendError(res, 401, 'Unauthorized', 'Authentication required. Please sign in.');
     return;
   }
 
   const session = await validateSession(token);
   if (!session) {
-    res.status(401).json({ error: 'Unauthorized', message: 'Session expired or invalid. Please sign in again.' });
+    sendError(res, 401, 'Unauthorized', 'Session expired or invalid. Please sign in again.');
     return;
   }
 
   const userRecord = await db.findUserById(session.userId);
   if (!userRecord) {
-    res.status(401).json({ error: 'Unauthorized', message: 'User account not found.' });
+    sendError(res, 401, 'Unauthorized', 'User account not found.');
     return;
   }
 
@@ -96,10 +97,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
-  res.status(403).json({
-    error: 'Forbidden',
-    message: 'CSRF validation failed: Missing custom header or untrusted origin.',
-  });
+  sendError(res, 403, 'Forbidden', 'CSRF validation failed: Missing custom header or untrusted origin.');
 }
 
 /**

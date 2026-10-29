@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, syncRateLimiter } from '../auth/middleware.js';
 import { runUserSync } from '../sync/engine.js';
 import { db } from '../db/index.js';
+import { parseSyncQuery } from '../http/validate.js';
 
 export const syncRouter = Router();
 
@@ -15,13 +16,16 @@ const lastUserSyncAttempt = new Map<string, number>();
  * Triggers background sync with 5-minute per-user cooldown
  */
 syncRouter.post('/', syncRateLimiter, async (req, res) => {
+  const query = parseSyncQuery(req, res);
+  if (!query) return;
+
   const userId = req.user!.id;
   const now = Date.now();
   const lastSync = lastUserSyncAttempt.get(userId) || 0;
   const cooldownMs = 5 * 60 * 1000; // 5 minutes
 
   // Cooldown check (can be bypassed with ?force=true in dev/test)
-  const isForce = req.query.force === 'true';
+  const isForce = query.force === 'true';
   if (!isForce && now - lastSync < cooldownMs) {
     const waitSeconds = Math.ceil((cooldownMs - (now - lastSync)) / 1000);
     res.status(429).json({
@@ -37,7 +41,7 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
   const syncPromise = runUserSync(userId);
 
   // In test / fast mode wait for completion; otherwise return job status
-  if (req.query.wait === 'true' || process.env.NODE_ENV === 'test') {
+  if (query.wait === 'true' || process.env.NODE_ENV === 'test') {
     const result = await syncPromise;
     res.json({
       ok: true,

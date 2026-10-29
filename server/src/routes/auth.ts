@@ -15,6 +15,8 @@ import { requireAuth, authRateLimiter } from '../auth/middleware.js';
 import { db } from '../db/index.js';
 import { runUserSync } from '../sync/engine.js';
 import { logger } from '../utils/logger.js';
+import { sendError } from '../http/errors.js';
+import { parseOAuthQuery } from '../http/validate.js';
 
 export const authRouter = Router();
 
@@ -88,10 +90,17 @@ authRouter.get('/github/start', (req, res) => {
  * Handles GitHub OAuth callback, verifies state, upserts user, creates session, redirects
  */
 authRouter.get('/github/callback', async (req, res) => {
-  if (req.query.error) {
-    const errCode = req.query.error as string;
-    const errDesc = req.query.error_description as string;
-    logger.warn({ errCode, errDesc }, 'OAuth error returned from GitHub');
+  const oauth = parseOAuthQuery(req.query);
+  if (!oauth) {
+    logger.warn({ event: 'oauth_query_rejected' }, 'OAuth callback query was not a set of strings');
+    res.redirect('/?error=invalid_oauth_state');
+    return;
+  }
+
+  if (oauth.error) {
+    const errCode = oauth.error;
+    const errDesc = oauth.error_description;
+    logger.warn({ errCode, errDesc, event: 'oauth_error' }, 'OAuth error returned from GitHub');
     if (errCode === 'access_denied') {
       res.redirect('/?error=access_denied');
       return;
@@ -100,8 +109,8 @@ authRouter.get('/github/callback', async (req, res) => {
     return;
   }
 
-  const code = req.query.code as string;
-  const state = req.query.state as string;
+  const code = oauth.code;
+  const state = oauth.state;
 
   if (!state || !verifyAndClearOAuthState(req, res, state)) {
     logger.warn('OAuth callback rejected: Invalid or expired state parameter');
@@ -151,10 +160,7 @@ authRouter.get('/github/callback', async (req, res) => {
  */
 authRouter.post('/dev-login', async (req, res) => {
   if (env.NODE_ENV === 'production' || !env.DEV_LOGIN_ENABLED) {
-    res.status(403).json({
-      error: 'Forbidden',
-      message: 'Dev login is disabled in production environments.',
-    });
+    sendError(res, 403, 'Forbidden', 'Dev login is disabled in production environments.');
     return;
   }
 
@@ -186,7 +192,7 @@ authRouter.post('/dev-login', async (req, res) => {
     });
   } catch (err: any) {
     logger.error({ error: err.message }, 'Dev login failed');
-    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+    sendError(res, 500, 'Internal Server Error', err.message);
   }
 });
 

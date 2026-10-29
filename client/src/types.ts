@@ -1,5 +1,9 @@
-export type RepoStatus = 'active' | 'cooling' | 'stale' | 'dead';
-export type DecisionType = 'keep' | 'pause' | 'retire';
+import type { ActivityStatus, Tag, Verdict } from '@shared';
+
+export type { ActivityStatus, Repo, Tag, Verdict } from '@shared';
+
+export type RepoStatus = ActivityStatus;
+export type DecisionType = Verdict;
 export type ThemeChoice = 'light' | 'dark' | 'system';
 
 export interface CommitDay {
@@ -8,7 +12,7 @@ export interface CommitDay {
 }
 
 export interface RepoMetadata {
-  label: string | null;
+  label: Tag | null;
   goal_date: string | null;
   note: string | null;
   decision: DecisionType | null;

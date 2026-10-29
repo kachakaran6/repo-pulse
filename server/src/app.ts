@@ -12,6 +12,7 @@ import { syncRouter } from './routes/sync.js';
 import { settingsRouter } from './routes/settings.js';
 import { shareRouter } from './routes/share.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import { sendError } from './http/errors.js';
 import { logger } from './utils/logger.js';
 
 export const app = express();
@@ -72,6 +73,23 @@ app.use(
 // Cookie parser
 app.use(cookieParser());
 
+app.use((req, res, next) => {
+  const started = Date.now();
+  res.on('finish', () => {
+    logger.info(
+      {
+        event: 'http_request',
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        duration_ms: Date.now() - started,
+      },
+      'request',
+    );
+  });
+  next();
+});
+
 // Raw body parser capture for webhook verification
 app.use(
   express.json({
@@ -126,11 +144,17 @@ if (fs.existsSync(publicDir)) {
 
 // 404 Handler for unhandled API routes
 app.use((_req, res) => {
-  res.status(404).json({ error: 'Not Found', message: 'Requested resource does not exist.' });
+  sendError(res, 404, 'Not Found', 'Requested resource does not exist.');
 });
 
 // Centralized error handler
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error({ err: err.message, stack: err.stack }, 'Unhandled API Error');
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error(
+    { event: 'unhandled_error', err: err.message, stack: err.stack, path: req.path, method: req.method },
+    'Unhandled API Error',
+  );
+  if (res.headersSent) {
+    return;
+  }
   res.status(500).json({ error: 'Internal Server Error', message: 'An unexpected error occurred.' });
 });

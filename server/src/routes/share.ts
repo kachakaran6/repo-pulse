@@ -5,6 +5,8 @@ import { requireAuth } from '../auth/middleware.js';
 import { db } from '../db/index.js';
 import { computeUnifiedStats, computeAchievements } from '../core/stats.js';
 import { statusOf, DEFAULT_THRESHOLDS } from '../core/status.js';
+import { sendError } from '../http/errors.js';
+import { parseRouteId } from '../http/validate.js';
 
 export const shareRouter = Router();
 
@@ -39,7 +41,7 @@ shareRouter.post('/api/snapshots', requireAuth, async (req, res) => {
   const userId = req.user!.id;
   const parsed = snapshotConfigSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid share card configuration', details: parsed.error.format() });
+    sendError(res, 400, 'Invalid share card configuration', 'Request failed validation.', parsed.error.format());
     return;
   }
 
@@ -136,10 +138,11 @@ shareRouter.get('/api/snapshots', requireAuth, async (req, res) => {
  */
 shareRouter.delete('/api/snapshots/:slug', requireAuth, async (req, res) => {
   const userId = req.user!.id;
-  const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+  const slug = parseRouteId(Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug, res);
+  if (!slug) return;
   const revoked = await db.revokeSnapshot(slug as string, userId);
   if (!revoked) {
-    res.status(404).json({ error: 'Snapshot not found or already revoked' });
+    sendError(res, 404, 'Snapshot not found or already revoked', 'Snapshot not found or already revoked');
     return;
   }
   await db.logAudit(userId, 'snapshot_revoked', { slug });

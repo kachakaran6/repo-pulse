@@ -4,6 +4,8 @@ import { requireAuth } from '../auth/middleware.js';
 import { db } from '../db/index.js';
 import { statusOf, explainStatus } from '../core/status.js';
 import { computeUnifiedStats, type RepoWithActivity } from '../core/stats.js';
+import { sendError } from '../http/errors.js';
+import { parseRepoListQuery, parseRouteId, parseSavedViewBody } from '../http/validate.js';
 
 export const reposRouter = Router();
 
@@ -15,6 +17,9 @@ reposRouter.use(requireAuth);
  * Returns authenticated user's repositories with computed status, unified stats, and optional filtering/sorting
  */
 reposRouter.get('/', async (req, res) => {
+  const query = parseRepoListQuery(req, res);
+  if (!query) return;
+
   const userId = req.user!.id;
   const userSettings = await db.getSettings(userId);
   const thresholds = {
@@ -96,18 +101,7 @@ reposRouter.get('/', async (req, res) => {
     };
   });
 
-  // Query parameters for filtering and sorting
-  const {
-    view,
-    search,
-    status,
-    relationship,
-    visibility,
-    language,
-    label,
-    decision,
-    sort,
-  } = req.query as Record<string, string | undefined>;
+  const { view, search, status, relationship, visibility, language, decision, sort } = query;
 
   // 1. View filter (all, mine, shared, orgs)
   if (view === 'mine') {
@@ -309,12 +303,9 @@ reposRouter.get('/saved-views', async (req, res) => {
  */
 reposRouter.post('/saved-views', async (req, res) => {
   const userId = req.user!.id;
-  const { name, query } = req.body;
-  if (!name || typeof name !== 'string') {
-    res.status(400).json({ error: 'Name is required' });
-    return;
-  }
-  const view = await db.createSavedView(userId, name.trim(), query || {});
+  const parsed = parseSavedViewBody(req, res);
+  if (!parsed) return;
+  const view = await db.createSavedView(userId, parsed.name.trim(), parsed.query || {});
   res.json({ ok: true, view });
 });
 
@@ -323,7 +314,9 @@ reposRouter.post('/saved-views', async (req, res) => {
  */
 reposRouter.delete('/saved-views/:id', async (req, res) => {
   const userId = req.user!.id;
-  const success = await db.deleteSavedView(req.params.id, userId);
+  const id = parseRouteId(req.params.id, res);
+  if (!id) return;
+  const success = await db.deleteSavedView(id, userId);
   res.json({ ok: success });
 });
 
@@ -341,7 +334,9 @@ reposRouter.get('/achievements', async (req, res) => {
  */
 reposRouter.get('/contributors/:repoId', async (req, res) => {
   const userId = req.user!.id;
-  const contribs = await db.getRepoContributors(req.params.repoId, userId);
+  const repoId = parseRouteId(req.params.repoId, res);
+  if (!repoId) return;
+  const contribs = await db.getRepoContributors(repoId, userId);
   res.json(contribs);
 });
 
@@ -361,16 +356,16 @@ reposRouter.patch('/:id/meta', async (req, res) => {
   const userId = req.user!.id;
   const repoId = req.params.id;
 
+  const id = parseRouteId(repoId, res);
+  if (!id) return;
+
   const parsed = patchMetaSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({
-      error: 'Invalid Metadata',
-      details: parsed.error.format(),
-    });
+    sendError(res, 400, 'Invalid Metadata', 'Request failed validation.', parsed.error.format());
     return;
   }
 
-  const updatedMeta = await db.upsertRepoMeta(repoId, userId, parsed.data);
+  const updatedMeta = await db.upsertRepoMeta(id, userId, parsed.data);
   await db.logAudit(userId, 'repo_meta_updated', { repo_id: repoId, updates: parsed.data });
 
   res.json({

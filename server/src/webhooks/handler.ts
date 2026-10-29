@@ -3,6 +3,8 @@ import type { Request, Response } from 'express';
 import { env } from '../config/env.js';
 import { authPool } from '../db/index.js';
 import { logger } from '../utils/logger.js';
+import { sendError } from '../http/errors.js';
+import { parseWebhookPayload } from '../http/validate.js';
 
 // Idempotency delivery cache with 1-hour TTL
 const processedDeliveries = new Map<string, number>();
@@ -54,7 +56,7 @@ export async function handleGitHubWebhook(req: Request, res: Response): Promise<
   const signature = req.headers['x-hub-signature-256'] as string;
 
   if (!deliveryId || !event) {
-    res.status(400).json({ error: 'Missing required webhook headers' });
+    sendError(res, 400, 'Missing required webhook headers', 'Missing required webhook headers');
     return;
   }
 
@@ -71,7 +73,12 @@ export async function handleGitHubWebhook(req: Request, res: Response): Promise<
 
   if (!isValid) {
     logger.warn({ event, deliveryId }, 'Invalid webhook signature rejected');
-    res.status(401).json({ error: 'Invalid webhook signature' });
+    sendError(res, 401, 'Invalid webhook signature', 'Invalid webhook signature');
+    return;
+  }
+
+  if (!parseWebhookPayload(typeof req.body === 'string' ? undefined : req.body)) {
+    sendError(res, 400, 'Validation Error', 'Webhook payload must be a JSON object.');
     return;
   }
 
