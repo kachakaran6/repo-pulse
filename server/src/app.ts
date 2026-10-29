@@ -42,17 +42,17 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, or same-origin)
       if (!origin) return callback(null, true);
-      // In development or when explicitly matching
+      // Allow only the configured application and local development origins.
       if (
         origin === env.APP_URL ||
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:') ||
-        origin.startsWith('https://localhost:')
+        (env.NODE_ENV !== 'production' &&
+          (origin.startsWith('http://localhost:') ||
+            origin.startsWith('http://127.0.0.1:') ||
+            origin.startsWith('https://localhost:')))
       ) {
         return callback(null, true);
       }
-      // Allow production domain origin
-      return callback(null, true);
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
