@@ -13,8 +13,8 @@
     "dev:client": "npm --prefix client run dev",
     "dev": "npm --prefix server run dev",
     "lint": "eslint shared server/src server/test client/src client/vite.config.js",
-    "format": "prettier --write shared server/src/http server/test/characterization.test.ts client/src/components/ErrorBoundary.tsx client/src/domain.test.ts",
-    "format:check": "prettier --check shared server/src/http server/test/characterization.test.ts client/src/components/ErrorBoundary.tsx client/src/domain.test.ts",
+    "format": "prettier --write shared server/src/http server/test/characterization.test.ts server/test/setup-env.ts client/src/components/ErrorBoundary.tsx client/src/domain.test.ts eslint.config.js",
+    "format:check": "prettier --check shared server/src/http server/test/characterization.test.ts server/test/setup-env.ts client/src/components/ErrorBoundary.tsx client/src/domain.test.ts eslint.config.js",
     "typecheck": "npm --prefix client run typecheck && npm --prefix server run typecheck",
     "test": "npm --prefix server run test && npm --prefix client run test",
     "build": "npm --prefix client run build && npm --prefix server run build"

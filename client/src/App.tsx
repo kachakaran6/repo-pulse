@@ -243,14 +243,10 @@ export const App: React.FC = () => {
 
   // Update Settings
   const handleUpdateSettings = async (newSettings: Partial<UserSettings>) => {
-    try {
-      const res = await api.updateSettings(newSettings);
-      setSettings(res.settings);
-      await refreshRepos();
-      showToast('Settings updated');
-    } catch (err: any) {
-      throw err;
-    }
+    const res = await api.updateSettings(newSettings);
+    setSettings(res.settings);
+    await refreshRepos();
+    showToast('Settings updated');
   };
 
   // Export Data JSON

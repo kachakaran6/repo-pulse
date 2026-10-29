@@ -527,7 +527,7 @@ export const db = {
         return res.rows[0];
       });
     } catch {
-      let s = mem.settings.get(uid) || {
+      const s = mem.settings.get(uid) || {
         user_id: uid,
         active_days: 7,
         cooling_days: 14,
@@ -565,7 +565,7 @@ export const db = {
         );
 
         const repoIds = reposRes.rows.map((r) => r.id);
-        let activitiesByRepo: Record<string, { day: string; commits_mine: number; commits_all: number; commits: number }[]> = {};
+        const activitiesByRepo: Record<string, { day: string; commits_mine: number; commits_all: number; commits: number }[]> = {};
 
         if (repoIds.length > 0) {
           const actRes = await client.query(

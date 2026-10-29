@@ -8,7 +8,7 @@ interface AnalyticsViewProps {
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onNavigateShare }) => {
-  const [stats, setStats] = useState<SummaryStats | null>(null);
+  const [stats, setStats] = useState<Partial<SummaryStats> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

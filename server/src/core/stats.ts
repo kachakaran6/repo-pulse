@@ -65,7 +65,7 @@ export function computeUnifiedStats(
   const thirtyDaysAgoStr = new Date(now - 30 * 864e5).toISOString().split('T')[0];
   const ninetyDaysAgoStr = new Date(now - 90 * 864e5).toISOString().split('T')[0];
 
-  let totalRepos = repos.length;
+  const totalRepos = repos.length;
   let activeCount = 0;
   let coolingCount = 0;
   let staleCount = 0;

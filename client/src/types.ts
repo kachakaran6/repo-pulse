@@ -9,6 +9,8 @@ export type ThemeChoice = 'light' | 'dark' | 'system';
 export interface CommitDay {
   day: string; // YYYY-MM-DD
   commits: number;
+  commits_mine?: number;
+  commits_all?: number;
 }
 
 export interface RepoMetadata {
@@ -35,6 +37,10 @@ export interface Repository {
   last_commit_at: string | null;
   language: string | null;
   archived_on_github: boolean;
+  owner_login?: string;
+  owner_type?: string;
+  relationship?: string;
+  is_collaborative?: boolean;
   status: RepoStatus;
   explanation: StatusExplanation;
   meta: RepoMetadata;
@@ -64,6 +70,9 @@ export interface InstallationStatus {
   token_connected?: boolean;
   account_login?: string;
   github_installation_id?: number;
+  repository_selection?: string;
+  repository_count?: number;
+  installation_id?: string | number;
 }
 
 export interface SyncStatus {

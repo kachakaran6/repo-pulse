@@ -294,7 +294,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   };
 
   // Group repositories according to groupBy setting
-  const groupedSections = useMemo(() => {
+  const groupedSections = useMemo((): {
+    key: string;
+    title: string;
+    count: number;
+    repos: Repository[];
+    desc?: string;
+    swatch?: string;
+  }[] => {
     if (groupBy === 'none') {
       return [{ key: 'all', title: 'Repositories', count: filteredAndSortedRepos.length, repos: filteredAndSortedRepos }];
     }

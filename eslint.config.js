@@ -21,6 +21,7 @@ export default tseslint.config(
       'no-unused-vars': 'off',
       'no-empty': 'off',
       'no-undef': 'off',
+      '@typescript-eslint/no-namespace': 'off',
     },
   },
 );
