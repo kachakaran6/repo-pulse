@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lock, ShieldCheck, Check, ArrowRight, ExternalLink } from 'lucide-react';
 import type { Repository } from '../types.js';
 import * as api from '../api.js';
@@ -20,6 +20,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ read: number; total: number }>({ read: 0, total: 0 });
   const [appUrl, setAppUrl] = useState<string>('https://github.com/apps/repopulse');
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     api.fetchAuthStatus().then((status) => {
@@ -27,6 +28,12 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         setAppUrl(status.appUrl);
       }
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+    };
   }, []);
 
   // Compute breakdown from repos
@@ -50,7 +57,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
 
     try {
       // Simulate progress ticks while running live sync
-      const timer = setInterval(() => {
+      syncTimerRef.current = setInterval(() => {
         setSyncProgress((prev) => {
           const next = prev.read + Math.floor(Math.random() * 8) + 3;
           const total = prev.total || 50;
@@ -60,11 +67,14 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
 
       await api.triggerSync();
       await onRefreshRepos();
-      clearInterval(timer);
       setSyncProgress({ read: repos.length || totalRepos, total: repos.length || totalRepos });
     } catch {
       // continue
     } finally {
+      if (syncTimerRef.current) {
+        clearInterval(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
       setIsSyncing(false);
     }
   };
