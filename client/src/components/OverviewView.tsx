@@ -523,7 +523,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       <div
         style={{
           position: 'sticky',
-          top: '56px',
+          // The header sits outside this scroll container, so the toolbar must
+          // stick to its own top edge rather than leaving a phantom offset.
+          top: 0,
           backgroundColor: 'var(--paper)',
           padding: '8px 0',
           zIndex: 40,
