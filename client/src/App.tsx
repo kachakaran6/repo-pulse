@@ -226,7 +226,7 @@ export const App: React.FC = () => {
     setIsSyncing(true);
     setErrorMessage(null);
     try {
-      const res = await api.triggerSync(true);
+      const res = await api.triggerSync();
       setLastSync({
         status: 'success',
         repos_read: res.repos_read || 0,

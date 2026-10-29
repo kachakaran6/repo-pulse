@@ -58,7 +58,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         });
       }, 300);
 
-      await api.triggerSync(true);
+      await api.triggerSync();
       await onRefreshRepos();
       clearInterval(timer);
       setSyncProgress({ read: repos.length || totalRepos, total: repos.length || totalRepos });
