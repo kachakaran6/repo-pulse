@@ -18,6 +18,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<{ read: number; total: number }>({ read: 0, total: 0 });
   const [appUrl, setAppUrl] = useState<string>('https://github.com/apps/repopulse');
   const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -53,6 +54,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   const handleStartSync = async () => {
     setCurrentStep(2);
     setIsSyncing(true);
+    setSyncError(null);
     setSyncProgress({ read: 0, total: totalRepos || 20 });
 
     try {
@@ -68,8 +70,8 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
       await api.triggerSync();
       await onRefreshRepos();
       setSyncProgress({ read: repos.length || totalRepos, total: repos.length || totalRepos });
-    } catch {
-      // continue
+    } catch (err: any) {
+      setSyncError(err.message || 'Unable to sync repositories. Please try again.');
     } finally {
       if (syncTimerRef.current) {
         clearInterval(syncTimerRef.current);
@@ -232,6 +234,15 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                     backgroundColor: 'var(--ink)',
                     transition: 'width 200ms ease',
                   }} />
+                </div>
+              </div>
+            ) : syncError ? (
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--heat-active)', marginBottom: '8px' }}>
+                  Sync could not finish
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  {syncError}
                 </div>
               </div>
             ) : (
