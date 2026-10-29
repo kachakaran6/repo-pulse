@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { UserProfile, SummaryStats, SyncStatus } from '../types.js';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { AppSidebar, type AppTab } from './layout/AppSidebar.js';
+import { AppHeader } from './layout/AppHeader.js';
 
 interface ShellProps {
-  activeTab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings' | 'share';
-  onSelectTab: (tab: 'overview' | 'analytics' | 'triage' | 'archive' | 'settings' | 'share') => void;
+  activeTab: AppTab;
+  onSelectTab: (tab: AppTab) => void;
   user: UserProfile | null;
   stats: SummaryStats | null;
   lastSync: SyncStatus | null;
@@ -12,20 +16,6 @@ interface ShellProps {
   onSignOut: () => Promise<void>;
   onSignOutAll: () => Promise<void>;
   children: React.ReactNode;
-}
-
-
-function formatRelativeSyncTime(dateStr?: string | null): string {
-  if (!dateStr) return 'Not synced yet';
-  const time = new Date(dateStr).getTime();
-  if (isNaN(time)) return 'Not synced yet';
-
-  const diffMinutes = Math.floor((Date.now() - time) / 60000);
-  if (diffMinutes <= 0) return 'Synced just now';
-  if (diffMinutes === 1) return 'Synced 1 min ago';
-  if (diffMinutes < 60) return `Synced ${diffMinutes} min ago`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  return `Synced ${diffHours}h ago`;
 }
 
 export const Shell: React.FC<ShellProps> = ({
@@ -40,186 +30,37 @@ export const Shell: React.FC<ShellProps> = ({
   onSignOutAll,
   children,
 }) => {
-  const [showUserMenu, setShowUserMenu] = useState(false);
-
-  // Undecided triage count = cooling + stale
   const triageCount = (stats?.coolingCount || 0) + (stats?.staleCount || 0);
 
+  if (!user) {
+    return <>{children}</>;
+  }
+
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="top-bar-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-            <a
-              href="#overview"
-              className="brand"
-              onClick={(e) => {
-                e.preventDefault();
-                onSelectTab('overview');
-              }}
-            >
-              <img src="/repopulse-mark.svg" alt="" width={24} height={24} style={{ display: 'block', flexShrink: 0 }} />
-              RepoPulse
-              {user?.login === 'demo-user' && (
-                <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: 'var(--r-pill)', backgroundColor: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--line)', letterSpacing: 'normal' }}>
-                  Demo Mode
-                </span>
-              )}
-            </a>
-
-            {user && (
-              <nav className="nav-tabs" aria-label="Main Navigation">
-                <button
-                  id="tab-overview"
-                  type="button"
-                  className={`nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
-                  onClick={() => onSelectTab('overview')}
-                >
-                  Overview
-                </button>
-                <button
-                  id="tab-analytics"
-                  type="button"
-                  className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
-                  onClick={() => onSelectTab('analytics')}
-                >
-                  Analytics
-                </button>
-                <button
-                  id="tab-share"
-                  type="button"
-                  className={`nav-tab ${activeTab === 'share' ? 'active' : ''}`}
-                  onClick={() => onSelectTab('share')}
-                >
-                  Share cards
-                </button>
-                <button
-                  id="tab-triage"
-                  type="button"
-                  className={`nav-tab ${activeTab === 'triage' ? 'active' : ''}`}
-                  onClick={() => onSelectTab('triage')}
-                >
-                  Triage
-                  {triageCount > 0 && (
-                    <span className="tab-badge num">{triageCount}</span>
-                  )}
-                </button>
-                <button
-                  id="tab-archive"
-                  type="button"
-                  className={`nav-tab ${activeTab === 'archive' ? 'active' : ''}`}
-                  onClick={() => onSelectTab('archive')}
-                >
-                  Archive
-                </button>
-                <button
-                  id="tab-settings"
-                  type="button"
-                  className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-                  onClick={() => onSelectTab('settings')}
-                >
-                  Settings
-                </button>
-              </nav>
-            )}
+    <TooltipProvider delayDuration={300}>
+      <SidebarProvider defaultOpen>
+        <AppSidebar
+          activeTab={activeTab}
+          onSelectTab={onSelectTab}
+          triageCount={triageCount}
+          isDemoUser={user.login === 'demo-user'}
+        />
+        <SidebarInset className="flex max-h-svh flex-col overflow-hidden">
+          <AppHeader
+            activeTab={activeTab}
+            user={user}
+            lastSyncFinishedAt={lastSync?.finished_at}
+            isSyncing={isSyncing}
+            onSync={onSync}
+            onSelectTab={onSelectTab}
+            onSignOut={onSignOut}
+            onSignOutAll={onSignOutAll}
+          />
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6">{children}</div>
           </div>
-
-          {user && (
-            <div className="top-bar-right">
-              {/* Sync text button with relative sync time */}
-              <div className="sync-status-group">
-                <span>
-                  {isSyncing
-                    ? 'Syncing repositories...'
-                    : formatRelativeSyncTime(lastSync?.finished_at)}
-                </span>
-                <button
-                  id="sync-btn"
-                  type="button"
-                  className="btn-quiet"
-                  onClick={onSync}
-                  disabled={isSyncing}
-                >
-                  Sync
-                </button>
-              </div>
-
-              {/* Avatar menu with normal font username */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  id="user-menu-btn"
-                  type="button"
-                  className="user-profile-badge"
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  aria-expanded={showUserMenu}
-                  title="User account menu"
-                >
-                  <img
-                    src={user.avatar_url}
-                    alt={user.login}
-                    className="user-avatar"
-                  />
-                </button>
-
-                {showUserMenu && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: '36px',
-                      backgroundColor: 'var(--surface)',
-                      border: '1px solid var(--line)',
-                      borderRadius: 'var(--r)',
-                      padding: '8px 0',
-                      minWidth: '200px',
-                      zIndex: 500,
-                      boxShadow: 'none',
-                    }}
-                  >
-                    <div style={{ padding: '4px 16px 8px 16px', borderBottom: '1px solid var(--line)', fontSize: '13px', color: 'var(--ink-2)' }}>
-                      Signed in as <strong style={{ color: 'var(--ink)' }}>{user.login}</strong>
-                    </div>
-                    <button
-                      id="menu-settings-btn"
-                      type="button"
-                      style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        onSelectTab('settings');
-                      }}
-                    >
-                      Settings
-                    </button>
-                    <button
-                      id="signout-btn"
-                      type="button"
-                      style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        onSignOut();
-                      }}
-                    >
-                      Sign out
-                    </button>
-                    <button
-                      type="button"
-                      style={{ width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--heat-active)' }}
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        onSignOutAll();
-                      }}
-                    >
-                      Sign out everywhere
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <main className="main-content">{children}</main>
-    </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { Repository, RepoStatus } from '../types.js';
 import { RepoRow } from './RepoRow.js';
+import { HeatBar } from './HeatBar.js';
 import { OverviewSkeleton } from './FeedbackComponents.js';
 import {
   Search,
@@ -381,7 +382,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const totalPoolCount = activePool.length || 1;
 
   return (
-    <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '24px 0 64px 0' }}>
+    <div className="pb-16">
       {/* 1. Top Summary Sentence & Action Row */}
       <div style={{ marginBottom: '24px' }}>
         <h1
@@ -467,108 +468,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       )}
 
       {/* 2. Heat Bar (Filter by status share) */}
-      <div style={{ marginBottom: '24px' }}>
-        <div
-          className="heat-bar"
-          style={{
-            display: 'flex',
-            height: '14px',
-            borderRadius: 'var(--r)',
-            overflow: 'hidden',
-            backgroundColor: 'var(--surface-2)',
-            marginBottom: '12px',
-          }}
-        >
-          {activeCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'active' ? 'all' : 'active')}
-              style={{
-                width: `${(activeCount / totalPoolCount) * 100}%`,
-                backgroundColor: 'var(--heat-active)',
-                border: 'none',
-                cursor: 'pointer',
-                opacity: selectedHeatFilter === 'all' || selectedHeatFilter === 'active' ? 1 : 0.35,
-              }}
-              title={`Active: ${activeCount} repos`}
-            />
-          )}
-          {coolingCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'cooling' ? 'all' : 'cooling')}
-              style={{
-                width: `${(coolingCount / totalPoolCount) * 100}%`,
-                backgroundColor: 'var(--heat-cooling)',
-                border: 'none',
-                cursor: 'pointer',
-                opacity: selectedHeatFilter === 'all' || selectedHeatFilter === 'cooling' ? 1 : 0.35,
-              }}
-              title={`Cooling: ${coolingCount} repos`}
-            />
-          )}
-          {staleCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'stale' ? 'all' : 'stale')}
-              style={{
-                width: `${(staleCount / totalPoolCount) * 100}%`,
-                backgroundColor: 'var(--heat-stale)',
-                border: 'none',
-                cursor: 'pointer',
-                opacity: selectedHeatFilter === 'all' || selectedHeatFilter === 'stale' ? 1 : 0.35,
-              }}
-              title={`Stale: ${staleCount} repos`}
-            />
-          )}
-          {deadCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'dead' ? 'all' : 'dead')}
-              style={{
-                width: `${(deadCount / totalPoolCount) * 100}%`,
-                backgroundColor: 'var(--heat-dead)',
-                border: 'none',
-                cursor: 'pointer',
-                opacity: selectedHeatFilter === 'all' || selectedHeatFilter === 'dead' ? 1 : 0.35,
-              }}
-              title={`Dead: ${deadCount} repos`}
-            />
-          )}
-        </div>
-
-        {/* Heat Bar Labels */}
-        <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: 'var(--ink-2)' }}>
-          <span
-            onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'active' ? 'all' : 'active')}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: selectedHeatFilter === 'active' ? 600 : 400 }}
-          >
-            <span style={{ width: '8px', height: '8px', backgroundColor: 'var(--heat-active)', display: 'inline-block' }} />
-            Active <strong style={{ color: 'var(--ink)' }}>{activeCount}</strong>
-          </span>
-          <span
-            onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'cooling' ? 'all' : 'cooling')}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: selectedHeatFilter === 'cooling' ? 600 : 400 }}
-          >
-            <span style={{ width: '8px', height: '8px', backgroundColor: 'var(--heat-cooling)', display: 'inline-block' }} />
-            Cooling <strong style={{ color: 'var(--ink)' }}>{coolingCount}</strong>
-          </span>
-          <span
-            onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'stale' ? 'all' : 'stale')}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: selectedHeatFilter === 'stale' ? 600 : 400 }}
-          >
-            <span style={{ width: '8px', height: '8px', backgroundColor: 'var(--heat-stale)', display: 'inline-block' }} />
-            Stale <strong style={{ color: 'var(--ink)' }}>{staleCount}</strong>
-          </span>
-          <span
-            onClick={() => setSelectedHeatFilter(selectedHeatFilter === 'dead' ? 'all' : 'dead')}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: selectedHeatFilter === 'dead' ? 600 : 400 }}
-          >
-            <span style={{ width: '8px', height: '8px', backgroundColor: 'var(--heat-dead)', display: 'inline-block' }} />
-            Dead <strong style={{ color: 'var(--ink)' }}>{deadCount}</strong>
-          </span>
-        </div>
-      </div>
+      <HeatBar
+        className="mb-6"
+        total={activePool.length}
+        selected={selectedHeatFilter}
+        onSelect={setSelectedHeatFilter}
+        segments={[
+          { status: 'active', count: activeCount },
+          { status: 'cooling', count: coolingCount },
+          { status: 'stale', count: staleCount },
+          { status: 'dead', count: deadCount },
+        ]}
+      />
 
       {/* 3. View Switcher (All, Mine, Shared with me, Organizations) */}
       <div style={{ display: 'flex', gap: '16px', borderBottom: '1px solid var(--line)', marginBottom: '16px', paddingBottom: '8px' }}>

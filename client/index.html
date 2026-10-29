@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F8F9FB" />
+    <meta name="theme-color" content="#F2F3F1" id="theme-color-meta" />
+    <script>
+      (function () {
+        var key = 'repopulse-theme';
+        var stored = localStorage.getItem(key);
+        var root = document.documentElement;
+        var dark =
+          stored === 'dark' ||
+          (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (stored === 'light') {
+          root.setAttribute('data-theme', 'light');
+          root.classList.remove('dark');
+        } else if (stored === 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          root.classList.add('dark');
+        } else {
+          root.removeAttribute('data-theme');
+          if (dark) root.classList.add('dark');
+          else root.classList.remove('dark');
+        }
+        var meta = document.getElementById('theme-color-meta');
+        if (meta) meta.setAttribute('content', dark ? '#131413' : '#F2F3F1');
+      })();
+    </script>
     <title>RepoPulse - GitHub Repository Ledger & Triage</title>
     <link rel="icon" type="image/svg+xml" href="/repopulse-mark.svg" sizes="any" />
     <link rel="apple-touch-icon" href="/repopulse-mark.svg" />

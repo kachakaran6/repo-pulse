@@ -43,7 +43,8 @@
   }
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+.dark {
   --paper: #131413;
   --surface: #1C1D1B;
   --surface-2: #252623;

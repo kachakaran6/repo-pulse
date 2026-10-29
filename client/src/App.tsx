@@ -20,7 +20,8 @@ import { LandingPage } from './components/LandingPage.js';
 import { WelcomeView } from './components/WelcomeView.js';
 import { ShareView } from './components/ShareView.js';
 import { LegalView } from './components/LegalViews.js';
-import { SkeletonRow, Toast, ErrorBanner } from './components/FeedbackComponents.js';
+import { showAppToast } from './lib/toast.js';
+import { SkeletonRow, ErrorBanner } from './components/FeedbackComponents.js';
 
 interface UndoAction {
   repoId: string | number;
@@ -59,26 +60,33 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Undo stack for triage
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((current) => (current === msg ? null : current));
-    }, 4000);
+    showAppToast(msg);
   };
 
   // Apply theme
   useEffect(() => {
     const root = document.documentElement;
+    const key = 'repopulse-theme';
     if (settings.theme === 'system') {
       root.removeAttribute('data-theme');
+      localStorage.removeItem(key);
+      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.classList.toggle('dark', dark);
     } else {
       root.setAttribute('data-theme', settings.theme);
+      localStorage.setItem(key, settings.theme);
+      root.classList.toggle('dark', settings.theme === 'dark');
     }
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const isDark =
+      settings.theme === 'dark' ||
+      (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (meta) meta.setAttribute('content', isDark ? '#131413' : '#F2F3F1');
   }, [settings.theme]);
 
   // Check auth status for dev mode
@@ -324,9 +332,6 @@ export const App: React.FC = () => {
 
     return (
       <>
-        {toastMessage && (
-          <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
-        )}
         <LandingPage
           onGithubLogin={handleGithubLogin}
           onDevLogin={handleDevLogin}
@@ -374,10 +379,6 @@ export const App: React.FC = () => {
       onSignOut={handleSignOut}
       onSignOutAll={handleSignOutAll}
     >
-      {toastMessage && (
-        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
-      )}
-
       {errorMessage && (
         <ErrorBanner
           message={errorMessage}
