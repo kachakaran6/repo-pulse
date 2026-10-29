@@ -1,0 +1,27 @@
+@layer components {
+  .btn-primary {
+    @apply inline-flex h-8 items-center justify-center rounded-sm border border-transparent bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex h-8 items-center justify-center rounded-sm border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-quiet {
+    @apply inline-flex h-8 items-center justify-center rounded-sm border border-transparent bg-transparent px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-outline,
+  .btn-secondary {
+    @apply inline-flex h-8 items-center justify-center rounded-sm border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-ink {
+    @apply inline-flex h-8 items-center justify-center rounded-sm border border-primary bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .ledger-row {
+    @apply cursor-pointer border-b border-border bg-card transition-colors hover:bg-muted;
+  }
+  .ledger-row.selected {
+    @apply bg-muted;
+  }
+  .overview-summary {
+    @apply mb-3 text-[28px] font-bold tracking-tight text-foreground;
+  }
+}

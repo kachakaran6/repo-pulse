@@ -57,7 +57,7 @@ interface ErrorBannerProps {
 
 export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, actionText, onAction }) => {
   return (
-    <Alert variant="destructive" className="mb-4 border-heat-stale/40 bg-surface text-foreground">
+    <Alert variant="destructive" className="mb-4 border-border bg-card text-foreground">
       <AlertTitle className="sr-only">Error</AlertTitle>
       <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span>{message}</span>

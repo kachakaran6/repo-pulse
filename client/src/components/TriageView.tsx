@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Repository } from '../types.js';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Button } from '@/components/ui/button';
 
 interface TriageViewProps {
   repos: Repository[];
@@ -123,21 +125,20 @@ export const TriageView: React.FC<TriageViewProps> = ({
 
   if (triageCandidates.length === 0 || !currentRepo) {
     return (
-      <div style={{ padding: '48px 0', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>All repos triaged</h2>
-        <p style={{ fontSize: '14px', color: 'var(--ink-2)', maxWidth: '440px', margin: '0 auto 16px auto' }}>
-          No cooling or stale repositories currently need a decision. Check Overview to see active work or visit Archive for retired projects.
-        </p>
+      <Empty className="border border-border py-16">
+        <EmptyHeader>
+          <EmptyTitle>All repos triaged</EmptyTitle>
+          <EmptyDescription>
+            No cooling or stale repositories need a decision. Check Overview for active work or Archive
+            for retired projects.
+          </EmptyDescription>
+        </EmptyHeader>
         {hasUndoableAction && (
-          <button
-            type="button"
-            className="btn-outline"
-            onClick={onUndoLastDecision}
-          >
+          <Button type="button" variant="outline" onClick={onUndoLastDecision}>
             Undo last decision (Z)
-          </button>
+          </Button>
         )}
-      </div>
+      </Empty>
     );
   }
 

@@ -1,4 +1,6 @@
-# GitPulse Design System — Fixed Visual Rules
+# RepoPulse Design System — Fixed Visual Rules
+
+> **Palette:** Use RepoPulse v3 **heat** neutrals and status colors from [`client/src/tokens.css`](../client/src/tokens.css), mapped to shadcn semantic tokens in [`client/src/styles/globals.css`](../client/src/styles/globals.css). Primary actions use **ink fill**, not blue. The heat ramp (ember → ash) is the only chromatic UI palette.
 
 ## 1. Design intent
 Build a calm, precise developer tool that feels like a polished productivity product—not a generic AI dashboard, gaming UI, crypto dashboard, or neon terminal. The interface should help users understand their work at a glance.
@@ -14,8 +16,25 @@ Build a calm, precise developer tool that feels like a polished productivity pro
 - Reuse components. Do not build a new visual treatment for every screen.
 - Do not claim an inaccessible contrast ratio; verify key text/status combinations during implementation.
 
-## 3. Fixed palette
-Use this palette as the single source of truth. Do not add extra accent colors without a documented design review.
+## 3. Fixed palette (RepoPulse v3 heat — canonical)
+
+Use [`client/src/tokens.css`](../client/src/tokens.css). Do not add extra accent colors without a documented design review.
+
+| Role | Light (approx.) | Usage |
+|---|---|---|
+| Paper / background | `#F2F3F1` | App canvas |
+| Surface | `#FFFFFF` | Panels, dialogs |
+| Ink | `#14181B` | Text, primary buttons |
+| Heat active | `#D2382A` | Active status |
+| Heat cooling | `#B87400` | Cooling status |
+| Heat stale | `#4A7BA3` | Stale status |
+| Heat dead | `#7B858D` | Dead status |
+
+Dark theme values are defined alongside in the same tokens file. shadcn `--primary` maps to ink, not a separate brand blue.
+
+### Legacy GitPulse blue palette (deprecated)
+
+The tables below are **superseded** by v3 heat tokens. Kept for historical reference only.
 
 ### Light theme
 | Token | Hex | Usage |

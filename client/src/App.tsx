@@ -22,6 +22,7 @@ import { ShareView } from './components/ShareView.js';
 import { LegalView } from './components/LegalViews.js';
 import { showAppToast } from './lib/toast.js';
 import { SkeletonRow, ErrorBanner } from './components/FeedbackComponents.js';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface UndoAction {
   repoId: string | number;
@@ -306,8 +307,8 @@ export const App: React.FC = () => {
 
   if (isLoading && !user) {
     return (
-      <div className="main-content" style={{ maxWidth: '1040px', margin: '40px auto', padding: '0 24px' }}>
-        <div style={{ width: '100%', height: '36px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--r)', marginBottom: '24px' }} />
+      <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6 pt-10 md:px-8">
+        <Skeleton className="h-9 w-64" />
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />

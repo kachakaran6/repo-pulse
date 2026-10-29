@@ -104,6 +104,7 @@ Final report: files changed, anything skipped, screenshots of every screen in bo
 ```
 
 ## Acceptance
+- [x] Tailwind v4 + shadcn sidebar shell; heat tokens bridged in `globals.css`
 - [ ] Only heat colors are chromatic; no navy, no teal brand color
 - [ ] Zero bordered row cards, zero "Details" buttons, one chip style (none)
 - [ ] Heat bar filters the list; strips are 90 days and readable

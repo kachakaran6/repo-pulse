@@ -1,5 +1,5 @@
 import React from 'react';
-import type { UserProfile } from '@/types.js';
+import type { UserProfile } from '../../types.js';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {

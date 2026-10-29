@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import type { UserSettings, InstallationStatus, ThemeChoice } from '../types.js';
 import { ExternalLink, AlertCircle, Trash2, Download } from 'lucide-react';
+import { PageHeader } from './layout/PageHeader.js';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface SettingsViewProps {
   settings: UserSettings;
@@ -103,12 +115,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       }] : []);
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 0 64px 0' }}>
-      <h1 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 32px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
-        Settings
-      </h1>
+    <div className="mx-auto max-w-2xl pb-16">
+      <PageHeader
+        title="Settings"
+        description="Thresholds, theme, GitHub access, and account controls."
+      />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+      <div className="settings-ledger">
         {/* Section: Thresholds */}
         <div style={{ padding: '24px 0', borderBottom: '1px solid var(--line)' }}>
           <div style={{ marginBottom: '16px' }}>
@@ -219,44 +232,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </form>
         </div>
 
-        {/* Section: Theme */}
-        <div style={{ padding: '24px 0', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>
-              Interface theme
-            </strong>
-            <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
-              Follow system appearance or force a specific mode.
-            </span>
+        <div className="settings-row flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+          <div className="settings-meta">
+            <div className="settings-label">Interface theme</div>
+            <p className="settings-desc">Follow system appearance or force a specific mode.</p>
           </div>
-
-          <div style={{
-            display: 'inline-flex',
-            backgroundColor: 'var(--surface-2)',
-            padding: '2px',
-            borderRadius: 'var(--r)',
-            border: '1px solid var(--line)',
-          }}>
+          <div className="inline-flex rounded-sm border border-border bg-muted p-0.5">
             {(['system', 'light', 'dark'] as ThemeChoice[]).map((t) => (
-              <button
+              <Button
                 key={t}
                 type="button"
+                variant={theme === t ? 'secondary' : 'ghost'}
+                size="sm"
+                className="capitalize"
                 onClick={() => handleThemeChange(t)}
-                style={{
-                  padding: '4px 14px',
-                  fontSize: '13px',
-                  fontWeight: theme === t ? 600 : 400,
-                  backgroundColor: theme === t ? 'var(--surface)' : 'transparent',
-                  color: theme === t ? 'var(--ink)' : 'var(--ink-2)',
-                  border: 'none',
-                  borderRadius: 'var(--r)',
-                  cursor: 'pointer',
-                  textTransform: 'capitalize',
-                  transition: 'var(--transition)',
-                }}
               >
                 {t}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -433,94 +425,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Delete Account Confirmation Modal */}
-      {showDeleteModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            backgroundColor: 'var(--surface)',
-            border: '1px solid var(--line)',
-            borderRadius: 'var(--r)',
-            padding: '24px',
-            maxWidth: '480px',
-            width: '90%',
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 12px 0', color: 'var(--ink)' }}>
-              Delete account permanently
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.5, margin: '0 0 16px 0' }}>
-              This action cannot be undone. All your synchronized repositories, commit histories, metadata labels, triage decisions, and saved views will be permanently purged from PostgreSQL.
-            </p>
-            <p style={{ fontSize: '13px', color: 'var(--ink)', margin: '0 0 12px 0' }}>
-              Type <strong>DELETE</strong> below to confirm:
-            </p>
-
-            <form onSubmit={handleDeleteAccountSubmit}>
-              <input
+      <Dialog open={showDeleteModal} onOpenChange={(open) => {
+        setShowDeleteModal(open);
+        if (!open) setDeleteConfirmText('');
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete account permanently</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. All synchronized repositories, commit histories, metadata,
+              triage decisions, and saved views will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleDeleteAccountSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="delete-confirm-input">Type DELETE to confirm</Label>
+              <Input
                 id="delete-confirm-input"
-                type="text"
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder="DELETE"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  fontFamily: 'var(--mono)',
-                  fontSize: '14px',
-                  backgroundColor: 'var(--paper)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 'var(--r)',
-                  color: 'var(--ink)',
-                  marginBottom: '16px',
-                  boxSizing: 'border-box',
-                }}
+                className="font-mono"
+                autoComplete="off"
               />
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setDeleteConfirmText('');
-                  }}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  id="confirm-delete-btn"
-                  type="submit"
-                  disabled={deleteConfirmText !== 'DELETE' || isDeleting}
-                  style={{
-                    backgroundColor: 'var(--heat-active)',
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: 'var(--r)',
-                    padding: '6px 16px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: deleteConfirmText === 'DELETE' && !isDeleting ? 'pointer' : 'not-allowed',
-                    opacity: deleteConfirmText === 'DELETE' && !isDeleting ? 1 : 0.5,
-                  }}
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete permanently'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                id="confirm-delete-btn"
+                type="submit"
+                variant="destructive"
+                disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+              >
+                {isDeleting ? 'Deleting…' : 'Delete permanently'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

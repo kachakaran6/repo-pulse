@@ -37,7 +37,7 @@ export const Shell: React.FC<ShellProps> = ({
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <SidebarProvider defaultOpen>
         <AppSidebar
           activeTab={activeTab}
