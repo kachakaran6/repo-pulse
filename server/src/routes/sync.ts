@@ -3,17 +3,15 @@ import { requireAuth, syncRateLimiter } from '../auth/middleware.js';
 import { runUserSync } from '../sync/engine.js';
 import { db } from '../db/index.js';
 import { parseSyncQuery } from '../http/validate.js';
+import { env } from '../config/env.js';
 
 export const syncRouter = Router();
 
 syncRouter.use(requireAuth);
 
-// Map to track last sync timestamp per user for the 5-minute cooldown rule
-const lastUserSyncAttempt = new Map<string, number>();
-
 /**
  * POST /api/sync
- * Triggers background sync with 5-minute per-user cooldown
+ * Triggers background sync with a persisted 5-minute per-user cooldown.
  */
 syncRouter.post('/', syncRateLimiter, async (req, res) => {
   const query = parseSyncQuery(req, res);
@@ -21,13 +19,23 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
 
   const userId = req.user!.id;
   const now = Date.now();
-  const lastSync = lastUserSyncAttempt.get(userId) || 0;
   const cooldownMs = 5 * 60 * 1000; // 5 minutes
+  const latestSync = await db.getLatestSyncRun(userId);
 
-  // Cooldown check (can be bypassed with ?force=true in dev/test)
-  const isForce = query.force === 'true';
-  if (!isForce && now - lastSync < cooldownMs) {
-    const waitSeconds = Math.ceil((cooldownMs - (now - lastSync)) / 1000);
+  if (latestSync?.status === 'running') {
+    res.status(409).json({
+      error: 'Sync already running',
+      message: 'A repository synchronization is already in progress.',
+    });
+    return;
+  }
+
+  // Force sync is a developer/test aid only; it must never bypass production
+  // rate controls just because a client supplies a query parameter.
+  const isForce = query.force === 'true' && env.NODE_ENV !== 'production';
+  const lastStartedAt = latestSync?.started_at ? new Date(latestSync.started_at).getTime() : 0;
+  if (!isForce && lastStartedAt && now - lastStartedAt < cooldownMs) {
+    const waitSeconds = Math.ceil((cooldownMs - (now - lastStartedAt)) / 1000);
     res.status(429).json({
       error: 'Cooldown active',
       message: `Sync is limited to once every 5 minutes. Please wait ${waitSeconds} seconds.`,
@@ -35,8 +43,6 @@ syncRouter.post('/', syncRateLimiter, async (req, res) => {
     });
     return;
   }
-
-  lastUserSyncAttempt.set(userId, now);
 
   const syncPromise = runUserSync(userId);
 

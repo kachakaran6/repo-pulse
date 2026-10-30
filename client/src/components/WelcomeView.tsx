@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lock, ShieldCheck, Check, ArrowRight, ExternalLink } from 'lucide-react';
 import type { Repository } from '../types.js';
 import * as api from '../api.js';
@@ -18,8 +18,10 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<{ read: number; total: number }>({ read: 0, total: 0 });
   const [appUrl, setAppUrl] = useState<string>('https://github.com/apps/repopulse');
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     api.fetchAuthStatus().then((status) => {
@@ -27,6 +29,12 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         setAppUrl(status.appUrl);
       }
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+    };
   }, []);
 
   // Compute breakdown from repos
@@ -46,11 +54,12 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   const handleStartSync = async () => {
     setCurrentStep(2);
     setIsSyncing(true);
+    setSyncError(null);
     setSyncProgress({ read: 0, total: totalRepos || 20 });
 
     try {
       // Simulate progress ticks while running live sync
-      const timer = setInterval(() => {
+      syncTimerRef.current = setInterval(() => {
         setSyncProgress((prev) => {
           const next = prev.read + Math.floor(Math.random() * 8) + 3;
           const total = prev.total || 50;
@@ -58,13 +67,16 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         });
       }, 300);
 
-      await api.triggerSync(true);
+      await api.triggerSync();
       await onRefreshRepos();
-      clearInterval(timer);
       setSyncProgress({ read: repos.length || totalRepos, total: repos.length || totalRepos });
-    } catch {
-      // continue
+    } catch (err: any) {
+      setSyncError(err.message || 'Unable to sync repositories. Please try again.');
     } finally {
+      if (syncTimerRef.current) {
+        clearInterval(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
       setIsSyncing(false);
     }
   };
@@ -222,6 +234,15 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                     backgroundColor: 'var(--ink)',
                     transition: 'width 200ms ease',
                   }} />
+                </div>
+              </div>
+            ) : syncError ? (
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--heat-active)', marginBottom: '8px' }}>
+                  Sync could not finish
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  {syncError}
                 </div>
               </div>
             ) : (

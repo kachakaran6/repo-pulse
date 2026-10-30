@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Repository } from '../types.js';
 import { ExternalLink, Lock, Users, Calendar, Tag, FileText, Check, Clock, Archive, X } from 'lucide-react';
 
@@ -20,10 +20,11 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({
   const [note, setNote] = useState(repo.meta?.note || '');
   const [isSaving, setIsSaving] = useState(false);
   const [contributors, setContributors] = useState<{ login: string; avatar_url?: string; commits_30d: number }[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Fetch contributors if collaborative
   useEffect(() => {
-    fetch(`/api/contributors/${repo.id}`, {
+    fetch(`/api/repos/contributors/${repo.id}`, {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
     })
@@ -31,6 +32,42 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({
       .then((data) => setContributors(data))
       .catch(() => {});
   }, [repo.id]);
+
+  useEffect(() => {
+    const previouslyFocusedElement = document.activeElement as HTMLElement | null;
+    const focusDialog = () => dialogRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    focusDialog();
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previouslyFocusedElement?.focus();
+    };
+  }, [onClose]);
 
   // 90-day activity breakdown
   const activityMap = new Map<string, number>();
@@ -81,6 +118,11 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="repo-detail-title"
+        tabIndex={-1}
         style={{
           width: '560px',
           maxWidth: '100%',
@@ -99,7 +141,7 @@ export const RepoDetailModal: React.FC<RepoDetailModalProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <h2 style={{ fontFamily: 'var(--mono)', fontSize: '20px', fontWeight: 600, margin: 0, color: 'var(--ink)' }}>
+              <h2 id="repo-detail-title" style={{ fontFamily: 'var(--mono)', fontSize: '20px', fontWeight: 600, margin: 0, color: 'var(--ink)' }}>
                 {repo.full_name}
               </h2>
               {repo.is_private && <Lock size={14} strokeWidth={1.75} style={{ color: 'var(--ink-2)' }} />}

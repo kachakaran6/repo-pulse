@@ -197,8 +197,8 @@ export function renderCardSvg(snapshot: any): string {
     periodCommits = stats.totalCommits90d || stats.totalCommits30d || 0;
     periodLabel = 'Commits (90d)';
   } else if (period === 'year') {
-    periodCommits = (stats.totalCommits90d || stats.totalCommits30d || 0) * 4;
-    periodLabel = 'Commits (Year)';
+    periodCommits = Math.round((stats.totalCommits90d || stats.totalCommits30d || 0) * (365 / 90));
+    periodLabel = 'Estimated commits (year)';
   }
 
   // Card Inner Canvas Dimensions

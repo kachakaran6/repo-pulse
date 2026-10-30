@@ -216,6 +216,33 @@
    and desaturated verdict colors
    ========================================================= */
 
+:root[data-accent="terracotta"] {
+  --accent-subtle: #FDF3EF;
+  --accent-border: #E8B9A9;
+  --accent-base: #B44622;
+  --accent-text: #8C3114;
+}
+
+:root[data-accent="sage"] {
+  --accent-subtle: #EFF6F1;
+  --accent-border: #B7D9C3;
+  --accent-base: #2B6244;
+  --accent-text: #1C462F;
+}
+
+:root[data-accent="cobalt"] {
+  --accent-subtle: #EEF4FB;
+  --accent-border: #B5CEEB;
+  --accent-base: #205493;
+  --accent-text: #163C6B;
+}
+
+/* =========================================================
+   DESIGNED DARK MODE (NOT INVERTED)
+   Softer contrast, slate-charcoal neutrals, luminous rim shadows,
+   and desaturated verdict colors
+   ========================================================= */
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --neutral-1: #141517;   /* Deep slate paper canvas, not pitch black */

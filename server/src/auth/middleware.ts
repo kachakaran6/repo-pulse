@@ -71,16 +71,6 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
-  // Custom client header verification
-  const customHeader =
-    req.headers['x-requested-with'] ||
-    req.headers['x-repopulse-client'] ||
-    req.headers['x-csrf-token'];
-
-  if (customHeader) {
-    return next();
-  }
-
   const origin = (req.headers['origin'] || req.headers['referer']) as string | undefined;
   const appUrl = env.APP_URL;
   const host = req.get('x-forwarded-host') || req.get('host');
@@ -93,7 +83,20 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     origin.startsWith('http://localhost') ||
     origin.startsWith('http://127.0.0.1');
 
-  if (isSameOrigin) {
+  // A browser-provided foreign origin is never trusted, even if it can supply
+  // a custom header. This prevents the header from becoming a CSRF bypass.
+  if (origin && !isSameOrigin) {
+    sendError(res, 403, 'Forbidden', 'CSRF validation failed: Untrusted origin.');
+    return;
+  }
+
+  // Same-origin API clients identify themselves with a custom header.
+  const customHeader =
+    req.headers['x-requested-with'] ||
+    req.headers['x-repopulse-client'] ||
+    req.headers['x-csrf-token'];
+
+  if (customHeader || isSameOrigin) {
     return next();
   }
 

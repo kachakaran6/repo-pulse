@@ -186,10 +186,11 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
       }>();
 
       // Step B: REST API pagination to fetch all repositories
+      let restDiscoveryComplete = false;
       try {
         let page = 1;
         let hasMorePages = true;
-        while (hasMorePages && page <= 25) {
+        while (hasMorePages) {
           const restRes = await fetch(
             `https://api.github.com/user/repos?per_page=100&page=${page}&affiliation=owner,collaborator,organization_member&sort=pushed&direction=desc`,
             {
@@ -223,6 +224,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
           const restRepos = (await restRes.json()) as any[];
           if (!Array.isArray(restRepos) || restRepos.length === 0) {
             hasMorePages = false;
+            restDiscoveryComplete = true;
             break;
           }
 
@@ -279,6 +281,7 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
 
           if (restRepos.length < 100) {
             hasMorePages = false;
+            restDiscoveryComplete = true;
           } else {
             page++;
           }
@@ -293,10 +296,8 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
         const since90Days = new Date(now.getTime() - 90 * 864e5).toISOString();
         let hasNextPage = true;
         let afterCursor: string | null = null;
-        let gqlPages = 0;
 
-        while (hasNextPage && gqlPages < 25) {
-          gqlPages++;
+        while (hasNextPage) {
           const gqlRes = await fetch('https://api.github.com/graphql', {
             method: 'POST',
             headers: {
@@ -445,7 +446,9 @@ export async function runUserSync(userId: string | number): Promise<SyncResult> 
       }
 
       // Step F: Purge missing/stale repositories
-      if (syncedGithubRepoIds.size > 0) {
+      // Only remove repositories after a complete REST listing. A rate limit or
+      // transient GitHub error must leave existing records intact.
+      if (restDiscoveryComplete && syncedGithubRepoIds.size > 0) {
         const removedCount = await db.removeMissingRepos(userId, Array.from(syncedGithubRepoIds));
         if (removedCount > 0) {
           logger.info({ userId, removedCount }, 'Purged mock/stale repositories from tenant database');
