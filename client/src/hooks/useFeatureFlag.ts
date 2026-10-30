@@ -70,6 +70,23 @@ export function useFeatureFlag() {
     return {};
   });
 
+  const [wipLimitEnabled, setWipLimitEnabledState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlFlag = params.get('flag:wip_limit') || params.get('flag:wipLimit');
+      if (urlFlag === 'false' || urlFlag === '0') return false;
+      if (urlFlag === 'true' || urlFlag === '1') return true;
+      const stored = localStorage.getItem('repopulse_flag_wip_limit');
+      if (stored === 'false') return false;
+    }
+    return true;
+  });
+
+  const setWipLimitEnabled = useCallback((enabled: boolean) => {
+    setWipLimitEnabledState(enabled);
+    localStorage.setItem('repopulse_flag_wip_limit', String(enabled));
+  }, []);
+
   const setVersion = useCallback((next: UIVersion) => {
     setVersionState(next);
     localStorage.setItem(STORAGE_KEY, next);
@@ -125,5 +142,7 @@ export function useFeatureFlag() {
     isScreenV4,
     setScreenVersion,
     screenOverrides,
+    wipLimitEnabled,
+    setWipLimitEnabled,
   };
 }

@@ -18,6 +18,9 @@ interface ShellProps {
   onOpenDesignTokens?: () => void;
   onOpenComponents?: () => void;
   uiVersion?: 'v3' | 'v4';
+  wipLimit?: number | null;
+  activeKeepCount?: number;
+  wipLimitEnabled?: boolean;
   onToggleUiVersion?: () => void;
   children: React.ReactNode;
 }
@@ -35,6 +38,9 @@ export const Shell: React.FC<ShellProps> = ({
   onOpenDesignTokens,
   onOpenComponents,
   uiVersion,
+  wipLimit,
+  activeKeepCount,
+  wipLimitEnabled,
   onToggleUiVersion,
   children,
 }) => {
@@ -67,6 +73,9 @@ export const Shell: React.FC<ShellProps> = ({
             onOpenComponents={onOpenComponents}
             uiVersion={uiVersion}
             onToggleUiVersion={onToggleUiVersion}
+            wipLimit={wipLimit}
+            activeKeepCount={activeKeepCount}
+            wipLimitEnabled={wipLimitEnabled}
           />
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6">{children}</div>

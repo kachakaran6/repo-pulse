@@ -62,3 +62,5 @@ export function compareByActivity<
   if (!b.last_commit_at) return -1;
   return new Date(b.last_commit_at).getTime() - new Date(a.last_commit_at).getTime();
 }
+
+export * from './wipLimit.js';

@@ -1,5 +1,7 @@
+import { WipLoweredBanner } from '../wip/WipLoweredBanner.js';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { Repository, RepoStatus } from '../../types.js';
+import { countActiveKeepRepos, wouldExceedWipLimit } from '@shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { RepoRowDense } from './ledger/RepoRowDense.js';
 import { RepoCard } from './ledger/RepoCard.js';
@@ -38,8 +40,22 @@ interface OverviewViewV4Props {
   isLoading?: boolean;
   onSync?: () => Promise<void>;
   onStartTriage?: () => void;
-  onDecision?: (repoId: number, decision: 'keep' | 'pause' | 'retire') => Promise<void>;
+  onDecision?: (
+    repoId: number,
+    decision: 'keep' | 'pause' | 'retire',
+    options?: {
+      goal_date?: string | null;
+      paused_until?: string | null;
+      override?: boolean;
+      wip_override?: boolean;
+      skipWipCheck?: boolean;
+    }
+  ) => Promise<void>;
   onUpdateLabel?: (repoId: number, label: string) => Promise<void>;
+  wipLimit?: number | null;
+  wipLimitEnabled?: boolean;
+  activeKeepCount?: number;
+  onOpenSettings?: () => void;
   installations?: any[];
 }
 
@@ -71,6 +87,10 @@ export const OverviewViewV4: React.FC<OverviewViewV4Props> = ({
   onStartTriage,
   onDecision,
   onUpdateLabel,
+  wipLimit,
+  wipLimitEnabled = true,
+  activeKeepCount,
+  onOpenSettings,
 }) => {
   // 1. View Mode (List, Cards, Board) with persistence
   const [viewMode, setViewMode] = useState<LedgerViewMode>(() => {
@@ -333,13 +353,39 @@ export const OverviewViewV4: React.FC<OverviewViewV4Props> = ({
   const handleBulkDecision = async (decision: 'keep' | 'pause' | 'retire') => {
     if (!onDecision || selectedRepoIds.size === 0) return;
     const count = selectedRepoIds.size;
-    const actionWord = decision === 'keep' ? 'Kept' : decision === 'pause' ? 'Paused' : 'Retired';
-    toast.info(`${actionWord} ${count} repositories`);
+    const selectedIds = Array.from(selectedRepoIds);
+    const isWipActive = Boolean(wipLimitEnabled && typeof wipLimit === 'number' && wipLimit > 0);
 
-    for (const id of Array.from(selectedRepoIds)) {
-      await onDecision(id, decision);
+    let runningActiveCount = activeKeepCount ?? countActiveKeepRepos(repos);
+
+    for (const id of selectedIds) {
+      const repo = repos.find((r) => r.id === id);
+      const isAlreadyKeep = repo?.meta?.decision === 'keep';
+      let willOverride = false;
+
+      if (decision === 'keep' && isWipActive && !isAlreadyKeep) {
+        if (wouldExceedWipLimit(runningActiveCount, false, wipLimit!)) {
+          willOverride = true;
+        }
+        runningActiveCount++;
+      }
+
+      await onDecision(id, decision, {
+        skipWipCheck: true,
+        wip_override: willOverride,
+      });
     }
+
     setSelectedRepoIds(new Set());
+
+    if (decision === 'keep' && isWipActive && typeof wipLimit === 'number') {
+      toast.info(
+        `Kept ${count} ${count === 1 ? 'repository' : 'repositories'} (${runningActiveCount} of ${wipLimit} active)`
+      );
+    } else {
+      const actionWord = decision === 'keep' ? 'Kept' : decision === 'pause' ? 'Paused' : 'Retired';
+      toast.info(`${actionWord} ${count} ${count === 1 ? 'repository' : 'repositories'}`);
+    }
   };
 
   const handleBulkTag = async (tag: string) => {
@@ -395,6 +441,14 @@ export const OverviewViewV4: React.FC<OverviewViewV4Props> = ({
       transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: 'easeOut' }}
       className="space-y-6 pb-20 font-sans"
     >
+      {wipLimitEnabled && typeof wipLimit === 'number' && (
+        <WipLoweredBanner
+          currentCount={activeKeepCount ?? 0}
+          wipLimit={wipLimit}
+          onOpenSettings={onOpenSettings}
+        />
+      )}
+
       {/* 1. "Needs a decision" Banner or "Ledger clear" Completion State */}
       {undecidedRepos.length > 0 ? (
         <div className="flex items-center justify-between gap-4 p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">

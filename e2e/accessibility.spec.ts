@@ -3,9 +3,10 @@ import AxeBuilder from '@axe-core/playwright';
 
 test.describe('Accessibility & Responsive Design Suite (WCAG 2.1 AA)', () => {
   test.beforeEach(async ({ page }) => {
-    // Suppress coachmark tour dialog during accessibility audits
+    // Suppress coachmark tour dialog and floating feedback prompt during page-specific accessibility audits
     await page.addInitScript(() => {
       localStorage.setItem('repopulse_coachmarks_dismissed_v4', 'true');
+      localStorage.setItem('repopulse_design_feedback_state', JSON.stringify({ dismissed: true }));
     });
   });
 
@@ -173,6 +174,26 @@ test.describe('Accessibility & Responsive Design Suite (WCAG 2.1 AA)', () => {
     await assertNoHorizontalOverflow(page);
 
     const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+
+  test('Feedback Prompt: Zero Axe violations when active', async ({ page }) => {
+    // Override the localStorage to allow prompt to show
+    await page.addInitScript(() => {
+      localStorage.removeItem('repopulse_design_feedback_state');
+    });
+    await page.goto('/?demo=true&welcome=false&prompt=true');
+    await page.waitForLoadState('domcontentloaded');
+
+    const prompt = page.locator('aside[aria-label="Design feedback prompt"]');
+    await expect(prompt).toBeVisible();
+    await page.waitForTimeout(350); // wait for fade-in animation to complete
+
+    const results = await new AxeBuilder({ page })
+      .include('aside[aria-label="Design feedback prompt"]')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
 

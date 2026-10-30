@@ -39,6 +39,9 @@ interface TriageViewV4Props {
   ) => Promise<void>;
   onUndoLastDecision: () => Promise<void>;
   hasUndoableAction: boolean;
+  wipLimit?: number | null;
+  wipLimitEnabled?: boolean;
+  activeKeepCount?: number;
   onExitTriage?: () => void;
 }
 
@@ -47,6 +50,9 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
   onDecision,
   onUndoLastDecision,
   hasUndoableAction,
+  wipLimit,
+  wipLimitEnabled = true,
+  activeKeepCount,
   onExitTriage,
 }) => {
   // Candidate pool: cooling and stale repositories not retired or paused
@@ -254,6 +260,12 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
         </div>
 
         {/* Summary of Session Decisions */}
+        {wipLimitEnabled && typeof wipLimit === 'number' && wipLimit > 0 && activeKeepCount !== undefined && activeKeepCount > wipLimit && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xs text-xs text-amber-800 dark:text-amber-200">
+            You have <strong>{activeKeepCount} active projects</strong> in Keep going (limit: {wipLimit}). You are in a busy phase—take your time, or pause projects whenever you are ready.
+          </div>
+        )}
+
         {sessionDecisions.length > 0 && (
           <div className="border border-neutral-4 bg-neutral-2/50 rounded-xs p-5 space-y-4 text-left">
             <div className="flex items-center justify-between border-b border-neutral-4 pb-2 text-xs">

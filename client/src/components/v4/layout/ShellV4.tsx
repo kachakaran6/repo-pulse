@@ -24,6 +24,9 @@ export interface ShellV4Props {
   onOpenDesignTokens?: () => void;
   onOpenComponents?: () => void;
   uiVersion?: 'v3' | 'v4';
+  wipLimit?: number | null;
+  activeKeepCount?: number;
+  wipLimitEnabled?: boolean;
   onToggleUiVersion?: () => void;
   onSelectFilter?: (filterType: 'status' | 'tag', value: string) => void;
   children: React.ReactNode;
@@ -42,6 +45,9 @@ export const ShellV4: React.FC<ShellV4Props> = ({
   onOpenDesignTokens,
   onOpenComponents,
   uiVersion = 'v4',
+  wipLimit,
+  activeKeepCount,
+  wipLimitEnabled,
   onToggleUiVersion,
   onSelectFilter,
   children,
@@ -196,6 +202,9 @@ export const ShellV4: React.FC<ShellV4Props> = ({
           isSyncing={isSyncing}
           onSync={onSync}
           onSelectTab={onSelectTab}
+          wipLimit={wipLimit}
+          activeKeepCount={activeKeepCount}
+          wipLimitEnabled={wipLimitEnabled}
           onSignOut={onSignOut}
           onSignOutAll={onSignOutAll}
           onOpenSearch={() => setSearchOpen(true)}

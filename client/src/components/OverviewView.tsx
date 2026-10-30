@@ -1,3 +1,6 @@
+import { WipLoweredBanner } from './wip/WipLoweredBanner.js';
+import { countActiveKeepRepos, wouldExceedWipLimit } from '@shared';
+import { showAppToast } from '../lib/toast.js';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { Repository, RepoStatus } from '../types.js';
 import { RepoRow } from './RepoRow.js';
@@ -33,8 +36,22 @@ interface OverviewViewProps {
   isLoading?: boolean;
   onSync?: () => Promise<void>;
   onStartTriage?: () => void;
-  onDecision?: (repoId: string | number, decision: 'keep' | 'pause' | 'retire') => Promise<void>;
+  onDecision?: (
+    repoId: string | number,
+    decision: 'keep' | 'pause' | 'retire',
+    options?: {
+      goal_date?: string | null;
+      paused_until?: string | null;
+      override?: boolean;
+      wip_override?: boolean;
+      skipWipCheck?: boolean;
+    }
+  ) => Promise<void>;
   onUpdateLabel?: (repoId: string | number, label: string) => Promise<void>;
+  wipLimit?: number | null;
+  wipLimitEnabled?: boolean;
+  activeKeepCount?: number;
+  onOpenSettings?: () => void;
   installations?: any[];
 }
 
@@ -54,6 +71,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onStartTriage,
   onDecision,
   onUpdateLabel,
+  wipLimit,
+  wipLimitEnabled = true,
+  activeKeepCount,
+  onOpenSettings,
   installations = [],
 }) => {
   // Search & Filters State
@@ -263,11 +284,41 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   };
 
   const handleBulkDecision = async (decision: 'keep' | 'pause' | 'retire') => {
-    if (!onDecision) return;
-    for (const id of selectedRepoIds) {
-      await onDecision(id, decision);
+    if (!onDecision || selectedRepoIds.size === 0) return;
+    const count = selectedRepoIds.size;
+    const selectedIds = Array.from(selectedRepoIds);
+    const isWipActive = Boolean(wipLimitEnabled && typeof wipLimit === 'number' && wipLimit > 0);
+
+    let runningActiveCount = activeKeepCount ?? countActiveKeepRepos(repos);
+
+    for (const id of selectedIds) {
+      const repo = repos.find((r) => r.id === id);
+      const isAlreadyKeep = repo?.meta?.decision === 'keep';
+      let willOverride = false;
+
+      if (decision === 'keep' && isWipActive && !isAlreadyKeep) {
+        if (wouldExceedWipLimit(runningActiveCount, false, wipLimit!)) {
+          willOverride = true;
+        }
+        runningActiveCount++;
+      }
+
+      await onDecision(id, decision, {
+        skipWipCheck: true,
+        wip_override: willOverride,
+      });
     }
+
     setSelectedRepoIds(new Set());
+
+    if (decision === 'keep' && isWipActive && typeof wipLimit === 'number') {
+      showAppToast(
+        `Kept ${count} ${count === 1 ? 'repository' : 'repositories'} (${runningActiveCount} of ${wipLimit} active)`
+      );
+    } else {
+      const actionWord = decision === 'keep' ? 'Kept' : decision === 'pause' ? 'Paused' : 'Retired';
+      showAppToast(`${actionWord} ${count} ${count === 1 ? 'repository' : 'repositories'}`);
+    }
   };
 
   const handleCopyInstallLink = () => {
@@ -390,6 +441,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   return (
     <div className="overview-page pb-16">
+      {wipLimitEnabled && typeof wipLimit === 'number' && (
+        <div className="mb-4">
+          <WipLoweredBanner
+            currentCount={activeKeepCount ?? 0}
+            wipLimit={wipLimit}
+            onOpenSettings={onOpenSettings}
+          />
+        </div>
+      )}
+
       {/* 1. Top Summary Sentence & Action Row */}
       <div style={{ marginBottom: '24px' }}>
         <h1

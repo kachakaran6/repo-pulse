@@ -1,3 +1,4 @@
+import { WipLimitIndicator } from '../wip/WipLimitIndicator.js';
 import React from 'react';
 import type { UserProfile } from '../../types.js';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -47,6 +48,9 @@ interface AppHeaderProps {
   onOpenDesignTokens?: () => void;
   onOpenComponents?: () => void;
   uiVersion?: 'v3' | 'v4';
+  wipLimit?: number | null;
+  activeKeepCount?: number;
+  wipLimitEnabled?: boolean;
   onToggleUiVersion?: () => void;
 }
 
@@ -62,6 +66,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onOpenDesignTokens,
   onOpenComponents,
   uiVersion,
+  wipLimit,
+  activeKeepCount,
+  wipLimitEnabled = true,
   onToggleUiVersion,
 }) => {
   return (
@@ -70,6 +77,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       <Separator orientation="vertical" className="mr-2 h-6" />
       <div className="min-w-0 flex-1 flex items-center gap-2">
         <p className="truncate text-sm font-semibold text-foreground">{TAB_TITLES[activeTab]}</p>
+        {activeTab === 'overview' && wipLimitEnabled && (
+          <WipLimitIndicator
+            currentCount={activeKeepCount ?? 0}
+            wipLimit={wipLimit}
+            onClick={() => onSelectTab('settings')}
+          />
+        )}
         {onToggleUiVersion && (
           <button
             type="button"

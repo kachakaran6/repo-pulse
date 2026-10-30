@@ -41,6 +41,7 @@ interface DecisionLogEntry {
   author?: string;
   pausedUntil?: string | null;
   goalDate?: string | null;
+  wipOverride?: boolean;
 }
 
 interface RepoDetailDrawerV4Props {
@@ -345,6 +346,7 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
         note: meta.note || undefined,
         pausedUntil: meta.paused_until,
         goalDate: meta.goal_date,
+        wipOverride: Boolean(meta.wip_override || meta.override),
       });
     }
 
@@ -852,6 +854,11 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
                           <span className={`text-2xs font-mono uppercase px-1.5 py-0.2 rounded-xs border font-medium ${nodeColor}`}>
                             {item.verdict}
                           </span>
+                          {item.wipOverride && (
+                            <span className="text-2xs font-mono px-1.5 py-0.2 rounded-xs border border-amber-400/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-medium">
+                              Limit override
+                            </span>
+                          )}
                           <span className="text-2xs font-mono text-neutral-8">{item.timestamp}</span>
                         </div>
 

@@ -20,6 +20,8 @@ export interface RepoMetadata {
   decision: DecisionType | null;
   paused_until: string | null;
   decided_at: string | null;
+  wip_override?: boolean;
+  override?: boolean;
 }
 
 export interface StatusExplanation {
@@ -55,6 +57,8 @@ export interface UserSettings {
   cooling_days: number;
   stale_days: number;
   theme: ThemeChoice;
+  wip_limit?: number | null;
+  wipLimit?: number | null;
 }
 
 export interface UserProfile {

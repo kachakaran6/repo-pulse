@@ -35,6 +35,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [coolingDays, setCoolingDays] = useState(settings.cooling_days);
   const [staleDays, setStaleDays] = useState(settings.stale_days);
   const [theme, setTheme] = useState<ThemeChoice>(settings.theme);
+  const initialWip = settings.wipLimit !== undefined ? settings.wipLimit : (settings.wip_limit !== undefined ? settings.wip_limit : 5);
+  const [wipLimit, setWipLimit] = useState<number>(initialWip ?? 5);
+  const [isWipEnabled, setIsWipEnabled] = useState<boolean>(initialWip !== null);
 
   const [thresholdError, setThresholdError] = useState<string | null>(null);
   const [thresholdSuccess, setThresholdSuccess] = useState(false);
@@ -44,7 +47,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const hasThresholdsChanged =
+  const hasWipChanged = (isWipEnabled ? wipLimit : null) !== initialWip;
+  const hasThresholdsChanged = hasWipChanged ||
     activeDays !== settings.active_days ||
     coolingDays !== settings.cooling_days ||
     staleDays !== settings.stale_days;
@@ -74,6 +78,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         active_days: activeDays,
         cooling_days: coolingDays,
         stale_days: staleDays,
+        wipLimit: isWipEnabled ? wipLimit : null,
+        wip_limit: isWipEnabled ? wipLimit : null,
       });
       setThresholdSuccess(true);
       setTimeout(() => setThresholdSuccess(false), 3000);
@@ -230,6 +236,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {isSaving ? 'Saving...' : 'Save thresholds'}
             </button>
           </form>
+        </div>
+
+        <div className="settings-row flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+          <div className="settings-meta">
+            <div className="settings-label">Work in progress limit</div>
+            <p className="settings-desc">
+              Maximum active repositories allowed in "Keep going" (1–20, or off). Default is 5.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-neutral-11 cursor-pointer">
+              <input
+                id="wip-limit-enabled-toggle"
+                type="checkbox"
+                checked={isWipEnabled}
+                onChange={(e) => setIsWipEnabled(e.target.checked)}
+                className="rounded-xs border-neutral-5"
+              />
+              <span>Enabled</span>
+            </label>
+            {isWipEnabled ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  id="wip-limit-input"
+                  aria-label="Max active projects"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={wipLimit}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val)) setWipLimit(Math.max(1, Math.min(20, val)));
+                  }}
+                  style={{
+                    width: '64px',
+                    padding: '4px 8px',
+                    fontFamily: 'var(--mono)',
+                    fontSize: '14px',
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r)',
+                    color: 'var(--ink)',
+                    textAlign: 'center',
+                  }}
+                />
+                <span className="text-2xs text-neutral-9 font-mono">repos</span>
+              </div>
+            ) : (
+              <span className="text-xs text-neutral-9 font-mono">Off (unlimited)</span>
+            )}
+          </div>
         </div>
 
         <div className="settings-row flex-col items-stretch gap-4 sm:flex-row sm:items-center">

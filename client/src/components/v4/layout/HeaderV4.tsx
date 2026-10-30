@@ -1,3 +1,4 @@
+import { WipLimitIndicator } from '../../wip/WipLimitIndicator.js';
 import React from 'react';
 import {
   Search,
@@ -56,6 +57,9 @@ export interface HeaderV4Props {
   onOpenDesignTokens?: () => void;
   onOpenComponents?: () => void;
   uiVersion?: 'v3' | 'v4';
+  wipLimit?: number | null;
+  activeKeepCount?: number;
+  wipLimitEnabled?: boolean;
   onToggleUiVersion?: () => void;
 }
 
@@ -72,6 +76,9 @@ export const HeaderV4: React.FC<HeaderV4Props> = ({
   onOpenDesignTokens,
   onOpenComponents,
   uiVersion = 'v4',
+  wipLimit,
+  activeKeepCount,
+  wipLimitEnabled = true,
   onToggleUiVersion,
 }) => {
   const isMac =
@@ -105,6 +112,13 @@ export const HeaderV4: React.FC<HeaderV4Props> = ({
         <h1 className="text-sm font-bold tracking-tight text-neutral-12 truncate font-sans">
           {TAB_TITLES[activeTab] || 'Ledger'}
         </h1>
+        {activeTab === 'overview' && wipLimitEnabled && (
+          <WipLimitIndicator
+            currentCount={activeKeepCount ?? 0}
+            wipLimit={wipLimit}
+            onClick={() => onSelectTab('settings')}
+          />
+        )}
       </div>
 
       {/* Center: Global Search Trigger Button */}

@@ -64,6 +64,9 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
   const [coolingDays, setCoolingDays] = useState(settings.cooling_days);
   const [staleDays, setStaleDays] = useState(settings.stale_days);
   const [theme, setTheme] = useState<ThemeChoice>(settings.theme);
+  const initialWip = settings.wipLimit !== undefined ? settings.wipLimit : (settings.wip_limit !== undefined ? settings.wip_limit : 5);
+  const [wipLimit, setWipLimit] = useState<number>(initialWip ?? 5);
+  const [isWipEnabled, setIsWipEnabled] = useState<boolean>(initialWip !== null);
 
   // Appearance states
   const [accent, setAccent] = useState<string>(() => {
@@ -133,7 +136,8 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
     return null;
   })();
 
-  const hasThresholdsChanged =
+  const hasWipChanged = (isWipEnabled ? wipLimit : null) !== initialWip;
+  const hasThresholdsChanged = hasWipChanged ||
     activeDays !== settings.active_days ||
     coolingDays !== settings.cooling_days ||
     staleDays !== settings.stale_days;
@@ -150,6 +154,8 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
         active_days: activeDays,
         cooling_days: coolingDays,
         stale_days: staleDays,
+        wipLimit: isWipEnabled ? wipLimit : null,
+        wip_limit: isWipEnabled ? wipLimit : null,
       });
       toast.success('Status thresholds updated');
     } catch (err: any) {
@@ -369,6 +375,50 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
                     <span>{validationError}</span>
                   </div>
                 )}
+
+                {/* Work in progress limit */}
+                <div className="border-t border-neutral-4 pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-xs font-semibold text-neutral-12 font-sans">
+                        Work in Progress Limit
+                      </h3>
+                      <p className="text-xs text-neutral-9 mt-0.5">
+                        Cap the maximum number of projects in "Keep going" (default 5, range 1–20, or off).
+                      </p>
+                    </div>
+                    <Switch
+                      id="wip-limit-switch-v4"
+                      checked={isWipEnabled}
+                      onCheckedChange={(checked) => setIsWipEnabled(checked)}
+                      aria-label="Toggle work in progress limit"
+                    />
+                  </div>
+
+                  {isWipEnabled ? (
+                    <div className="flex items-center gap-3 pt-1">
+                      <span className="text-xs text-neutral-11">Max active projects:</span>
+                      <input
+                        id="wip-limit-input-v4"
+                        aria-label="Maximum active projects allowed in Keep going"
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={wipLimit}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!isNaN(val)) setWipLimit(Math.max(1, Math.min(20, val)));
+                        }}
+                        className="w-16 h-8 px-2 text-center font-mono text-sm bg-neutral-1 border border-neutral-5 rounded-xs text-neutral-12 focus:border-neutral-12 focus:ring-1 focus:ring-neutral-12 outline-none"
+                      />
+                      <span className="text-2xs text-neutral-9 font-mono">(Range: 1 – 20 projects)</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-neutral-9 italic pt-0.5">
+                      Limit is turned off (unlimited projects).
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <Button

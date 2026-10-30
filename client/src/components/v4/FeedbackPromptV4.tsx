@@ -116,7 +116,7 @@ export const FeedbackPromptV4: React.FC<FeedbackPromptV4Props> = ({ onSwitchToCl
                 <button
                   type="button"
                   onClick={() => handleSelectSentiment('positive')}
-                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3 text-xs font-medium rounded-xs border border-neutral-4 bg-neutral-2 hover:bg-neutral-3 hover:text-neutral-12 text-neutral-11 transition-all cursor-pointer touch-manipulation"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3 text-xs font-semibold rounded-xs border border-neutral-5 bg-neutral-1 hover:bg-neutral-2 text-neutral-12 transition-all cursor-pointer touch-manipulation"
                 >
                   <ThumbsUp size={13} className="text-verdict-keep-text" />
                   <span>Loving it</span>
@@ -124,7 +124,7 @@ export const FeedbackPromptV4: React.FC<FeedbackPromptV4Props> = ({ onSwitchToCl
                 <button
                   type="button"
                   onClick={() => handleSelectSentiment('negative')}
-                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3 text-xs font-medium rounded-xs border border-neutral-4 bg-neutral-2 hover:bg-neutral-3 hover:text-neutral-12 text-neutral-11 transition-all cursor-pointer touch-manipulation"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3 text-xs font-semibold rounded-xs border border-neutral-5 bg-neutral-1 hover:bg-neutral-2 text-neutral-12 transition-all cursor-pointer touch-manipulation"
                 >
                   <ThumbsDown size={13} className="text-verdict-retire-text" />
                   <span>Needs work</span>
@@ -149,7 +149,7 @@ export const FeedbackPromptV4: React.FC<FeedbackPromptV4Props> = ({ onSwitchToCl
                   <button
                     type="button"
                     onClick={handleRevertToClassic}
-                    className="text-[11px] text-neutral-8 hover:text-neutral-12 underline transition-colors cursor-pointer"
+                    className="text-[11px] text-neutral-11 hover:text-neutral-12 underline transition-colors cursor-pointer"
                   >
                     Switch to classic
                   </button>
@@ -157,7 +157,7 @@ export const FeedbackPromptV4: React.FC<FeedbackPromptV4Props> = ({ onSwitchToCl
                     <button
                       type="button"
                       onClick={() => setSentiment(null)}
-                      className="h-7 px-2 text-[11px] text-neutral-8 hover:text-neutral-12 rounded-xs transition-colors cursor-pointer"
+                      className="h-7 px-2 text-[11px] text-neutral-11 hover:text-neutral-12 rounded-xs transition-colors cursor-pointer"
                     >
                       Back
                     </button>

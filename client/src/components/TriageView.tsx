@@ -8,10 +8,19 @@ interface TriageViewProps {
   onDecision: (
     repoId: number,
     decision: 'keep' | 'pause' | 'retire',
-    options?: { goal_date?: string | null; paused_until?: string | null }
+    options?: {
+      goal_date?: string | null;
+      paused_until?: string | null;
+      override?: boolean;
+      wip_override?: boolean;
+      skipWipCheck?: boolean;
+    }
   ) => Promise<void>;
   onUndoLastDecision: () => Promise<void>;
   hasUndoableAction: boolean;
+  wipLimit?: number | null;
+  wipLimitEnabled?: boolean;
+  activeKeepCount?: number;
 }
 
 export const TriageView: React.FC<TriageViewProps> = ({
@@ -19,6 +28,9 @@ export const TriageView: React.FC<TriageViewProps> = ({
   onDecision,
   onUndoLastDecision,
   hasUndoableAction,
+  wipLimit,
+  wipLimitEnabled = true,
+  activeKeepCount,
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -133,8 +145,13 @@ export const TriageView: React.FC<TriageViewProps> = ({
             for retired projects.
           </EmptyDescription>
         </EmptyHeader>
+        {wipLimitEnabled && typeof wipLimit === 'number' && wipLimit > 0 && activeKeepCount !== undefined && activeKeepCount > wipLimit && (
+          <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-800 dark:text-amber-200 max-w-md mx-auto">
+            You have <strong>{activeKeepCount} active projects</strong> in Keep going (limit: {wipLimit}). You are in a busy phase—take your time, or pause projects whenever you are ready.
+          </div>
+        )}
         {hasUndoableAction && (
-          <Button type="button" variant="outline" onClick={onUndoLastDecision}>
+          <Button type="button" variant="outline" onClick={onUndoLastDecision} className="mt-4">
             Undo last decision (Z)
           </Button>
         )}

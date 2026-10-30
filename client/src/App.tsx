@@ -1,3 +1,5 @@
+import { countActiveKeepRepos, getActiveKeepRepos, wouldExceedWipLimit } from '@shared';
+import { WipLimitDialog } from './components/wip/WipLimitDialog.js';
 import React, { useState, useEffect, useCallback } from 'react';
 import type {
   Repository,
@@ -72,7 +74,7 @@ export const App: React.FC = () => {
     if (window.location.pathname === '/share') return 'share';
     return 'overview';
   });
-  const { isV4, version: uiVersion, setVersion: setUiVersion, isScreenV4 } = useFeatureFlag();
+  const { isV4, version: uiVersion, setVersion: setUiVersion, isScreenV4, wipLimitEnabled } = useFeatureFlag();
   const [isDesignTokensRoute, setIsDesignTokensRoute] = useState<boolean>(
     () =>
       window.location.pathname === '/design-tokens' ||
@@ -100,6 +102,10 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [wipDialogTarget, setWipDialogTarget] = useState<Repository | null>(null);
+  const activeKeepCount = countActiveKeepRepos(repos);
+  const currentWipLimit = settings.wipLimit !== undefined ? settings.wipLimit : settings.wip_limit;
 
   // Undo stack for triage
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
@@ -267,10 +273,44 @@ export const App: React.FC = () => {
   const handleTriageDecision = async (
     repoId: string | number,
     decision: 'keep' | 'pause' | 'retire',
-    options?: { goal_date?: string | null; paused_until?: string | null }
+    options?: {
+      goal_date?: string | null;
+      paused_until?: string | null;
+      override?: boolean;
+      wip_override?: boolean;
+      skipWipCheck?: boolean;
+    }
   ) => {
     const targetRepo = repos.find((r) => String(r.id) === String(repoId));
     if (!targetRepo) return;
+
+    const isAlreadyKeep = targetRepo.meta?.decision === 'keep';
+    const shouldCheckWip =
+      wipLimitEnabled &&
+      typeof currentWipLimit === 'number' &&
+      currentWipLimit > 0 &&
+      decision === 'keep' &&
+      !isAlreadyKeep &&
+      !options?.skipWipCheck &&
+      !options?.override &&
+      !options?.wip_override &&
+      activeTab !== 'triage';
+
+    if (shouldCheckWip && wouldExceedWipLimit(activeKeepCount, isAlreadyKeep, currentWipLimit)) {
+      setWipDialogTarget(targetRepo);
+      return;
+    }
+
+    const isOverLimitInTriage =
+      decision === 'keep' &&
+      !isAlreadyKeep &&
+      activeTab === 'triage' &&
+      wipLimitEnabled &&
+      typeof currentWipLimit === 'number' &&
+      currentWipLimit > 0 &&
+      wouldExceedWipLimit(activeKeepCount, isAlreadyKeep, currentWipLimit);
+
+    const finalWipOverride = Boolean(options?.wip_override || options?.override || isOverLimitInTriage);
 
     setUndoStack((prev) => [
       ...prev,
@@ -293,6 +333,8 @@ export const App: React.FC = () => {
                   ...r.meta,
                   decision,
                   decided_at: new Date().toISOString(),
+                  wip_override: finalWipOverride,
+                  override: finalWipOverride,
                   goal_date: options?.goal_date ?? r.meta?.goal_date ?? null,
                   paused_until: options?.paused_until ?? r.meta?.paused_until ?? null,
                 },
@@ -310,6 +352,8 @@ export const App: React.FC = () => {
         decision,
         goal_date: options?.goal_date,
         paused_until: options?.paused_until,
+        wip_override: finalWipOverride,
+        override: finalWipOverride,
       });
 
       await refreshRepos();
@@ -319,6 +363,27 @@ export const App: React.FC = () => {
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to record decision');
     }
+  };
+
+  const handlePauseInstead = async (repoToPause: Repository, target: Repository) => {
+    await handleTriageDecision(repoToPause.id, 'pause', { skipWipCheck: true });
+    await handleTriageDecision(target.id, 'keep', { skipWipCheck: true });
+    setWipDialogTarget(null);
+  };
+
+  const handleRaiseLimit = async (newLimit: number, target: Repository) => {
+    await handleUpdateSettings({ wipLimit: newLimit, wip_limit: newLimit });
+    await handleTriageDecision(target.id, 'keep', { skipWipCheck: true });
+    setWipDialogTarget(null);
+  };
+
+  const handleKeepAnyway = async (target: Repository) => {
+    await handleTriageDecision(target.id, 'keep', {
+      override: true,
+      wip_override: true,
+      skipWipCheck: true,
+    });
+    setWipDialogTarget(null);
   };
 
   // Undo last triage decision
@@ -811,6 +876,9 @@ export const App: React.FC = () => {
             onDecision={handleTriageDecision}
             onUndoLastDecision={handleUndoLastDecision}
             hasUndoableAction={undoStack.length > 0}
+            wipLimit={currentWipLimit}
+            wipLimitEnabled={wipLimitEnabled}
+            activeKeepCount={activeKeepCount}
           />
         )
       )}
@@ -866,7 +934,21 @@ export const App: React.FC = () => {
           />
         )
       )}
-          {/* Design Feedback Prompt (v4 rollout) */}
+          {/* Work in progress limit dialog */}
+      {wipDialogTarget && typeof currentWipLimit === 'number' && (
+        <WipLimitDialog
+          isOpen={Boolean(wipDialogTarget)}
+          onClose={() => setWipDialogTarget(null)}
+          targetRepo={wipDialogTarget}
+          currentKeepRepos={getActiveKeepRepos(repos)}
+          wipLimit={currentWipLimit}
+          onPauseInstead={handlePauseInstead}
+          onRaiseLimit={handleRaiseLimit}
+          onKeepAnyway={handleKeepAnyway}
+        />
+      )}
+
+      {/* Design Feedback Prompt (v4 rollout) */}
       {isV4 && (
         <FeedbackPromptV4
           onSwitchToClassic={() => {

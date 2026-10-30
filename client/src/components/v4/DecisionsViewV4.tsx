@@ -29,6 +29,7 @@ interface DecisionItem {
   monthKey: string;
   monthLabel: string;
   reason: string;
+  wipOverride?: boolean;
 }
 
 export const DecisionsViewV4: React.FC<DecisionsViewV4Props> = ({
@@ -67,6 +68,7 @@ export const DecisionsViewV4: React.FC<DecisionsViewV4Props> = ({
         dateStr,
         monthKey,
         monthLabel,
+        wipOverride: Boolean(r.meta?.wip_override || r.meta?.override),
         reason,
       });
     }
