@@ -64,3 +64,4 @@ export function compareByActivity<
 }
 
 export * from './wipLimit.js';
+export * from './search.js';

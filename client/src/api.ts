@@ -263,3 +263,117 @@ export async function deleteSavedView(id: string | number): Promise<void> {
 }
 
 
+
+// ==========================================
+// Semantic & Hybrid Search APIs
+// ==========================================
+
+import type {
+  SearchScope,
+  SearchResult,
+  GroupedSearchResult,
+  SearchIndexStatus,
+  SearchSettings,
+  OutboundPreview,
+  SimilarRepo,
+} from '@shared';
+
+export async function searchHybrid(
+  query: string,
+  scope: SearchScope = 'all',
+  limit = 20
+): Promise<{
+  query: string;
+  scope: SearchScope;
+  totalMatches: number;
+  results: SearchResult[];
+  groupedByRepo: GroupedSearchResult[];
+}> {
+  const url = `${API_BASE}/search?q=${encodeURIComponent(query)}&scope=${scope}&limit=${limit}`;
+  const res = await fetch(url, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Search failed: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchSearchIndexStatus(): Promise<SearchIndexStatus> {
+  const res = await fetch(`${API_BASE}/search/status`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch search index status: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function triggerSearchIndex(
+  fullReindex = false
+): Promise<{ ok: boolean; status?: SearchIndexStatus }> {
+  const res = await fetch(`${API_BASE}/search/index?wait=true`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({ fullReindex }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to trigger index: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteSearchIndex(): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/search/index`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to delete index: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchOutboundPreview(): Promise<OutboundPreview> {
+  const res = await fetch(`${API_BASE}/search/preview-outbound`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch outbound preview: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateSearchSettings(
+  settings: Partial<SearchSettings>
+): Promise<{ ok: boolean; settings: SearchSettings }> {
+  const res = await fetch(`${API_BASE}/search/settings`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update search settings: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchSimilarRepos(
+  repoId: string | number,
+  limit = 5
+): Promise<SimilarRepo[]> {
+  const res = await fetch(`${API_BASE}/repos/${repoId}/similar?limit=${limit}`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
+}

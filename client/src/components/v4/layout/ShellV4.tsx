@@ -29,6 +29,7 @@ export interface ShellV4Props {
   wipLimitEnabled?: boolean;
   onToggleUiVersion?: () => void;
   onSelectFilter?: (filterType: 'status' | 'tag', value: string) => void;
+  onSelectRepo?: (repoId: string | number) => void;
   children: React.ReactNode;
 }
 
@@ -50,6 +51,7 @@ export const ShellV4: React.FC<ShellV4Props> = ({
   wipLimitEnabled,
   onToggleUiVersion,
   onSelectFilter,
+  onSelectRepo,
   children,
 }) => {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -243,6 +245,7 @@ export const ShellV4: React.FC<ShellV4Props> = ({
         open={searchOpen}
         onOpenChange={setSearchOpen}
         items={commandItems}
+        onSelectRepo={onSelectRepo}
       />
 
       {/* Subtle First-Run Coachmarks (shown once, dismissible) */}

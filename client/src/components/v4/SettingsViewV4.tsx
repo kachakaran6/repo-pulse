@@ -25,7 +25,9 @@ import {
   Trash2,
   Download,
   Check,
+  Sparkles,
 } from 'lucide-react';
+import { SearchIndexStatusView } from './SearchIndexStatusView.js';
 import { toast } from './ui/Toast.js';
 import { ACCENT_PALETTES, DENSITY_MODES, FONT_CHOICES } from '../../tokens/index.js';
 import { ScoreRing } from './ledger/ScoreRing.js';
@@ -45,6 +47,7 @@ type SettingsSection =
   | 'sync'
   | 'appearance'
   | 'scoring'
+  | 'search'
   | 'notifications'
   | 'data'
   | 'privacy';
@@ -281,6 +284,7 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
     { id: 'sync', label: 'Sync & Access', icon: <RefreshCw size={14} /> },
     { id: 'appearance', label: 'Appearance', icon: <Sun size={14} /> },
     { id: 'scoring', label: 'Scoring & Cadence', icon: <Flame size={14} /> },
+    { id: 'search', label: 'Semantic Search', icon: <Sparkles size={14} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
     { id: 'data', label: 'Data & Backup', icon: <HardDrive size={14} /> },
     { id: 'privacy', label: 'Privacy & Danger', icon: <Shield size={14} /> },
@@ -432,6 +436,13 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
                   </Button>
                 </div>
               </form>
+            </section>
+          )}
+
+          {/* SECTION: SEMANTIC SEARCH & VECTOR INDEX */}
+          {activeSection === 'search' && (
+            <section className="space-y-6">
+              <SearchIndexStatusView />
             </section>
           )}
 

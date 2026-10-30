@@ -784,6 +784,10 @@ export const App: React.FC = () => {
       }}
       uiVersion={uiVersion}
       onToggleUiVersion={() => setUiVersion(isV4 ? 'v3' : 'v4')}
+      onSelectRepo={(repoId) => {
+        const found = repos.find((r) => String(r.id) === String(repoId));
+        if (found) setSelectedRepoForDetail(found);
+      }}
     >
       {errorMessage && (
         <ErrorBanner

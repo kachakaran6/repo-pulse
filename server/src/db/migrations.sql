@@ -356,3 +356,44 @@ CREATE POLICY sync_runs_tenant_isolation ON sync_runs FOR ALL
 
 CREATE POLICY audit_log_tenant_isolation ON audit_log FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
+
+
+-- 10. Semantic Search & Repo Chunks
+CREATE TABLE IF NOT EXISTS repo_chunks (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  repo_id BIGINT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  path TEXT,
+  text TEXT NOT NULL,
+  token_count INTEGER NOT NULL DEFAULT 0,
+  embedding JSONB,
+  commit_sha TEXT,
+  model_name TEXT NOT NULL,
+  model_version TEXT NOT NULL DEFAULT '1.0',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_repo_chunks_user_repo ON repo_chunks(user_id, repo_id);
+CREATE INDEX IF NOT EXISTS idx_repo_chunks_kind ON repo_chunks(kind);
+
+ALTER TABLE repo_chunks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY repo_chunks_tenant_isolation ON repo_chunks FOR ALL
+  USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
+
+-- 11. Search Index Settings
+CREATE TABLE IF NOT EXISTS search_index_settings (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  index_private_repos BOOLEAN NOT NULL DEFAULT false,
+  embedding_provider TEXT NOT NULL DEFAULT 'local',
+  embedding_api_key TEXT,
+  embedding_model TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2',
+  embedding_endpoint TEXT,
+  last_indexed_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'idle',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE search_index_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY search_index_settings_tenant_isolation ON search_index_settings FOR ALL
+  USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);

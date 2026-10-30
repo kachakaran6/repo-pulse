@@ -12,6 +12,7 @@ import { syncRouter } from './routes/sync.js';
 import { settingsRouter } from './routes/settings.js';
 import { shareRouter } from './routes/share.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import { searchRouter } from './routes/search.js';
 import { sendError } from './http/errors.js';
 import { logger } from './utils/logger.js';
 
@@ -125,6 +126,8 @@ app.use('/api', apiRateLimiter);
 app.use('/api/repos', reposRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api', settingsRouter);
+app.use('/api', searchRouter);
+app.use('/search', searchRouter);
 app.use(shareRouter);
 
 // Fallback for SPA routing if public directory exists
@@ -134,6 +137,7 @@ if (fs.existsSync(publicDir)) {
       _req.path.startsWith('/api') ||
       _req.path.startsWith('/auth') ||
       _req.path.startsWith('/webhooks') ||
+      _req.path.startsWith('/search') ||
       _req.path.startsWith('/s/')
     ) {
       return next();

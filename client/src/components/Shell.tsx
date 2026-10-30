@@ -22,6 +22,7 @@ interface ShellProps {
   activeKeepCount?: number;
   wipLimitEnabled?: boolean;
   onToggleUiVersion?: () => void;
+  onSelectRepo?: (repoId: string | number) => void;
   children: React.ReactNode;
 }
 
@@ -42,6 +43,7 @@ export const Shell: React.FC<ShellProps> = ({
   activeKeepCount,
   wipLimitEnabled,
   onToggleUiVersion,
+  onSelectRepo,
   children,
 }) => {
   const triageCount = (stats?.coolingCount || 0) + (stats?.staleCount || 0);

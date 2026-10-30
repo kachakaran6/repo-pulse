@@ -154,3 +154,30 @@ export const auditLog = pgTable('audit_log', {
   meta: jsonb('meta').default({}).notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const repoChunks = pgTable('repo_chunks', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: bigint('user_id', { mode: 'number' }).references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  repo_id: bigint('repo_id', { mode: 'number' }).references(() => repos.id, { onDelete: 'cascade' }).notNull(),
+  kind: text('kind').notNull(),
+  path: text('path'),
+  text: text('text').notNull(),
+  token_count: integer('token_count').default(0).notNull(),
+  embedding: jsonb('embedding'),
+  commit_sha: text('commit_sha'),
+  model_name: text('model_name').notNull(),
+  model_version: text('model_version').default('1.0').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const searchIndexSettings = pgTable('search_index_settings', {
+  user_id: bigint('user_id', { mode: 'number' }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  index_private_repos: boolean('index_private_repos').default(false).notNull(),
+  embedding_provider: text('embedding_provider').default('local').notNull(),
+  embedding_api_key: text('embedding_api_key'),
+  embedding_model: text('embedding_model').default('all-MiniLM-L6-v2').notNull(),
+  embedding_endpoint: text('embedding_endpoint'),
+  last_indexed_at: timestamp('last_indexed_at', { withTimezone: true }),
+  status: text('status').default('idle').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});

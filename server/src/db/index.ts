@@ -234,6 +234,33 @@ interface MemoryAchievement {
   meta: any;
 }
 
+interface MemoryRepoChunk {
+  id: string;
+  user_id: string;
+  repo_id: string;
+  kind: string;
+  path?: string | null;
+  text: string;
+  token_count: number;
+  embedding?: number[] | null;
+  commit_sha?: string | null;
+  model_name: string;
+  model_version: string;
+  created_at: Date;
+}
+
+interface MemorySearchSettings {
+  user_id: string;
+  index_private_repos: boolean;
+  embedding_provider: string;
+  embedding_api_key?: string | null;
+  embedding_model: string;
+  embedding_endpoint?: string | null;
+  last_indexed_at?: Date | null;
+  status: string;
+  updated_at: Date;
+}
+
 const mem = {
   users: new Map<string, MemoryUser>(),
   sessions: new Map<string, MemorySession>(),
@@ -247,6 +274,8 @@ const mem = {
   savedViews: new Map<string, MemorySavedView>(),
   snapshots: new Map<string, MemorySnapshot>(),
   achievements: new Map<string, MemoryAchievement>(),
+  chunks: new Map<string, MemoryRepoChunk>(),
+  searchSettings: new Map<string, MemorySearchSettings>(),
   syncRuns: [] as any[],
   auditLogs: [] as any[],
   idCounter: 1000,
@@ -1570,7 +1599,268 @@ export const db = {
       for (const [k, ac] of mem.achievements.entries()) {
         if (ac.user_id === uid) mem.achievements.delete(k);
       }
+      for (const [k, ch] of mem.chunks.entries()) {
+        if (ch.user_id === uid) mem.chunks.delete(k);
+      }
+      mem.searchSettings.delete(uid);
       return true;
     }
   },
+
+  // 10. Semantic Search & Repo Chunks
+  async getSearchSettings(userId: string | number) {
+    const uid = String(userId);
+    try {
+      return await withTenant(userId, async (client) => {
+        const res = await client.query(
+          `SELECT user_id, index_private_repos, embedding_provider, embedding_api_key, embedding_model, embedding_endpoint, last_indexed_at, status, updated_at
+           FROM search_index_settings
+           WHERE user_id = $1`,
+          [uid]
+        );
+        if (res.rows.length > 0) return res.rows[0];
+        const ins = await client.query(
+          `INSERT INTO search_index_settings (user_id, index_private_repos, embedding_provider, embedding_model, status)
+           VALUES ($1, false, 'local', 'all-MiniLM-L6-v2', 'idle')
+           ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
+           RETURNING user_id, index_private_repos, embedding_provider, embedding_api_key, embedding_model, embedding_endpoint, last_indexed_at, status, updated_at`,
+          [uid]
+        );
+        return ins.rows[0];
+      });
+    } catch {
+      let s = mem.searchSettings.get(uid);
+      if (!s) {
+        s = {
+          user_id: uid,
+          index_private_repos: false,
+          embedding_provider: 'local',
+          embedding_api_key: null,
+          embedding_model: 'all-MiniLM-L6-v2',
+          embedding_endpoint: null,
+          last_indexed_at: null,
+          status: 'idle',
+          updated_at: new Date(),
+        };
+        mem.searchSettings.set(uid, s);
+      }
+      return s;
+    }
+  },
+
+  async updateSearchSettings(
+    userId: string | number,
+    updates: {
+      index_private_repos?: boolean;
+      embedding_provider?: string;
+      embedding_api_key?: string | null;
+      embedding_model?: string;
+      embedding_endpoint?: string | null;
+      last_indexed_at?: Date | null;
+      status?: string;
+    }
+  ) {
+    const uid = String(userId);
+    try {
+      return await withTenant(userId, async (client) => {
+        const current = await this.getSearchSettings(userId);
+        const indexPrivate = updates.index_private_repos !== undefined ? updates.index_private_repos : current.index_private_repos;
+        const provider = updates.embedding_provider !== undefined ? updates.embedding_provider : current.embedding_provider;
+        const apiKey = updates.embedding_api_key !== undefined ? updates.embedding_api_key : current.embedding_api_key;
+        const model = updates.embedding_model !== undefined ? updates.embedding_model : current.embedding_model;
+        const endpoint = updates.embedding_endpoint !== undefined ? updates.embedding_endpoint : current.embedding_endpoint;
+        const lastIndexed = updates.last_indexed_at !== undefined ? updates.last_indexed_at : current.last_indexed_at;
+        const status = updates.status !== undefined ? updates.status : current.status;
+
+        const res = await client.query(
+          `INSERT INTO search_index_settings (user_id, index_private_repos, embedding_provider, embedding_api_key, embedding_model, embedding_endpoint, last_indexed_at, status, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+           ON CONFLICT (user_id) DO UPDATE SET
+             index_private_repos = EXCLUDED.index_private_repos,
+             embedding_provider = EXCLUDED.embedding_provider,
+             embedding_api_key = EXCLUDED.embedding_api_key,
+             embedding_model = EXCLUDED.embedding_model,
+             embedding_endpoint = EXCLUDED.embedding_endpoint,
+             last_indexed_at = EXCLUDED.last_indexed_at,
+             status = EXCLUDED.status,
+             updated_at = now()
+           RETURNING user_id, index_private_repos, embedding_provider, embedding_api_key, embedding_model, embedding_endpoint, last_indexed_at, status, updated_at`,
+          [uid, indexPrivate, provider, apiKey, model, endpoint, lastIndexed, status]
+        );
+        return res.rows[0];
+      });
+    } catch {
+      const s = mem.searchSettings.get(uid) || {
+        user_id: uid,
+        index_private_repos: false,
+        embedding_provider: 'local',
+        embedding_api_key: null,
+        embedding_model: 'all-MiniLM-L6-v2',
+        embedding_endpoint: null,
+        last_indexed_at: null,
+        status: 'idle',
+        updated_at: new Date(),
+      };
+      if (updates.index_private_repos !== undefined) s.index_private_repos = updates.index_private_repos;
+      if (updates.embedding_provider !== undefined) s.embedding_provider = updates.embedding_provider;
+      if (updates.embedding_api_key !== undefined) s.embedding_api_key = updates.embedding_api_key;
+      if (updates.embedding_model !== undefined) s.embedding_model = updates.embedding_model;
+      if (updates.embedding_endpoint !== undefined) s.embedding_endpoint = updates.embedding_endpoint;
+      if (updates.last_indexed_at !== undefined) s.last_indexed_at = updates.last_indexed_at;
+      if (updates.status !== undefined) s.status = updates.status;
+      s.updated_at = new Date();
+      mem.searchSettings.set(uid, s);
+      return s;
+    }
+  },
+
+  async getRepoChunks(userId: string | number, repoId?: string | number, kind?: string) {
+    const uid = String(userId);
+    const rid = repoId !== undefined ? String(repoId) : null;
+    try {
+      return await withTenant(userId, async (client) => {
+        let sql = `SELECT id, user_id, repo_id, kind, path, text, token_count, embedding, commit_sha, model_name, model_version, created_at
+                   FROM repo_chunks
+                   WHERE user_id = $1`;
+        const params: any[] = [uid];
+        if (rid) {
+          params.push(rid);
+          sql += ` AND repo_id = $${params.length}`;
+        }
+        if (kind) {
+          params.push(kind);
+          sql += ` AND kind = $${params.length}`;
+        }
+        sql += ` ORDER BY id ASC`;
+        const res = await client.query(sql, params);
+        return res.rows.map((r) => ({
+          ...r,
+          embedding: Array.isArray(r.embedding) ? r.embedding : (typeof r.embedding === 'string' ? JSON.parse(r.embedding) : r.embedding),
+        }));
+      });
+    } catch {
+      const results: MemoryRepoChunk[] = [];
+      for (const ch of mem.chunks.values()) {
+        if (ch.user_id === uid) {
+          if (rid && ch.repo_id !== rid) continue;
+          if (kind && ch.kind !== kind) continue;
+          results.push(ch);
+        }
+      }
+      return results;
+    }
+  },
+
+  async saveRepoChunks(
+    userId: string | number,
+    repoId: string | number,
+    chunks: Array<{
+      kind: string;
+      path?: string | null;
+      text: string;
+      token_count: number;
+      embedding?: number[] | null;
+      commit_sha?: string | null;
+      model_name: string;
+      model_version: string;
+    }>
+  ) {
+    const uid = String(userId);
+    const rid = String(repoId);
+    try {
+      return await withTenant(userId, async (client) => {
+        // Delete existing chunks for this repo
+        await client.query(`DELETE FROM repo_chunks WHERE user_id = $1 AND repo_id = $2`, [uid, rid]);
+
+        const inserted: any[] = [];
+        for (const c of chunks) {
+          const res = await client.query(
+            `INSERT INTO repo_chunks (user_id, repo_id, kind, path, text, token_count, embedding, commit_sha, model_name, model_version, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+             RETURNING id, user_id, repo_id, kind, path, text, token_count, embedding, commit_sha, model_name, model_version, created_at`,
+            [
+              uid,
+              rid,
+              c.kind,
+              c.path || null,
+              c.text,
+              c.token_count || 0,
+              c.embedding ? JSON.stringify(c.embedding) : null,
+              c.commit_sha || null,
+              c.model_name,
+              c.model_version || '1.0',
+            ]
+          );
+          inserted.push(res.rows[0]);
+        }
+        return inserted;
+      });
+    } catch {
+      // Delete existing in memory
+      for (const [k, ch] of mem.chunks.entries()) {
+        if (ch.user_id === uid && ch.repo_id === rid) {
+          mem.chunks.delete(k);
+        }
+      }
+      // Insert new
+      const inserted: MemoryRepoChunk[] = [];
+      for (const c of chunks) {
+        const id = mem.nextId();
+        const ch: MemoryRepoChunk = {
+          id,
+          user_id: uid,
+          repo_id: rid,
+          kind: c.kind,
+          path: c.path || null,
+          text: c.text,
+          token_count: c.token_count || 0,
+          embedding: c.embedding || null,
+          commit_sha: c.commit_sha || null,
+          model_name: c.model_name,
+          model_version: c.model_version || '1.0',
+          created_at: new Date(),
+        };
+        mem.chunks.set(id, ch);
+        inserted.push(ch);
+      }
+      return inserted;
+    }
+  },
+
+  async deleteRepoChunks(userId: string | number, repoId?: string | number) {
+    const uid = String(userId);
+    const rid = repoId !== undefined ? String(repoId) : null;
+    try {
+      return await withTenant(userId, async (client) => {
+        if (rid) {
+          const res = await client.query(`DELETE FROM repo_chunks WHERE user_id = $1 AND repo_id = $2`, [uid, rid]);
+          return res.rowCount ?? 0;
+        } else {
+          const res = await client.query(`DELETE FROM repo_chunks WHERE user_id = $1`, [uid]);
+          return res.rowCount ?? 0;
+        }
+      });
+    } catch {
+      let count = 0;
+      for (const [k, ch] of mem.chunks.entries()) {
+        if (ch.user_id === uid) {
+          if (rid && ch.repo_id !== rid) continue;
+          mem.chunks.delete(k);
+          count++;
+        }
+      }
+      return count;
+    }
+  },
+
+  async deleteUserSearchIndex(userId: string | number) {
+    const uid = String(userId);
+    await this.deleteRepoChunks(userId);
+    await this.updateSearchSettings(userId, {
+      last_indexed_at: null,
+      status: 'idle',
+    });
+    return true;
+  },
+
 };

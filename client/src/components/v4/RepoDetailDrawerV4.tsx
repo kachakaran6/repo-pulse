@@ -9,6 +9,7 @@ import { Button } from './ui/Button.js';
 import { Input } from './ui/Input.js';
 import { SimpleTooltip } from './ui/Tooltip.js';
 import { toast } from './ui/Toast.js';
+import { cn } from '@/lib/utils';
 import {
   ExternalLink,
   Lock,
@@ -31,7 +32,11 @@ import {
   TrendingUp,
   History,
   Layers,
+  Sparkles,
+  CopyCheck,
 } from 'lucide-react';
+import { fetchSimilarRepos } from '../../api.js';
+import type { SimilarRepo } from '@shared';
 
 interface DecisionLogEntry {
   id: string;
@@ -78,6 +83,8 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
   const [contributors, setContributors] = useState<
     { login: string; avatar_url?: string; commits_30d: number }[]
   >([]);
+  const [similarRepos, setSimilarRepos] = useState<SimilarRepo[]>([]);
+  const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
   // Decisions tab state for recording new decision with rationale
   const [newDecisionVerdict, setNewDecisionVerdict] = useState<'keep' | 'pause' | 'retire'>(
@@ -103,6 +110,15 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setContributors(data))
       .catch(() => {});
+  }, [repo.id]);
+
+  // Fetch similar repositories (nearest neighbors for duplicate detection)
+  useEffect(() => {
+    setIsLoadingSimilar(true);
+    fetchSimilarRepos(repo.id, 4)
+      .then((data) => setSimilarRepos(data))
+      .catch(() => setSimilarRepos([]))
+      .finally(() => setIsLoadingSimilar(false));
   }, [repo.id]);
 
   // Next / Previous Repo Index Calculation
@@ -669,6 +685,90 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
                 ) : (
                   <p className="text-xs text-neutral-9 py-1">
                     Solo repository maintained by owner.
+                  </p>
+                )}
+              </div>
+
+              {/* Similar Repositories (Nearest Neighbors & Duplicate Detection) */}
+              <div className="border border-neutral-4 rounded-xs p-4 space-y-3 bg-neutral-2/30">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-neutral-12 flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-amber-500" />
+                    <span>Similar Repositories (Nearest Neighbors)</span>
+                  </h3>
+                  <span className="text-2xs font-mono text-neutral-8">Semantic Similarity</span>
+                </div>
+
+                {isLoadingSimilar ? (
+                  <p className="text-2xs font-mono text-neutral-8 py-2 animate-pulse">
+                    Computing semantic nearest neighbors...
+                  </p>
+                ) : similarRepos.length > 0 ? (
+                  <div className="space-y-2">
+                    {similarRepos.map((sim) => {
+                      const matchPct = Math.round(sim.similarity * 100);
+                      const isHighDuplicate = matchPct >= 80;
+                      const matchedRepo = allRepos.find((r) => String(r.id) === String(sim.repoId));
+
+                      return (
+                        <div
+                          key={sim.repoId}
+                          className="p-2.5 rounded-xs border border-neutral-4 bg-neutral-2/60 flex flex-col gap-1.5 text-xs hover:border-neutral-6 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="font-semibold text-neutral-12 truncate">{sim.fullName}</span>
+                              {sim.language && (
+                                <span className="text-3xs font-mono px-1 rounded-xs bg-neutral-3 text-neutral-10 border border-neutral-5">
+                                  {sim.language}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span
+                                className={cn(
+                                  'text-3xs font-mono px-1.5 py-0.5 rounded-xs border font-semibold',
+                                  isHighDuplicate
+                                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-500'
+                                    : 'border-neutral-5 bg-neutral-3 text-neutral-10'
+                                )}
+                              >
+                                {matchPct}% match
+                              </span>
+
+                              {matchedRepo && onSelectRepo && (
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectRepo(matchedRepo)}
+                                  className="text-2xs font-mono text-neutral-9 hover:text-neutral-12 flex items-center gap-1 cursor-pointer underline underline-offset-2 ml-1"
+                                >
+                                  View <ExternalLink className="size-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Shared signals */}
+                          {sim.sharedSignals && sim.sharedSignals.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {sim.sharedSignals.map((signal, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className="text-3xs font-mono text-neutral-9 bg-neutral-3/80 px-1.5 py-0.2 rounded-xs"
+                                >
+                                  • {signal}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-neutral-9 py-1">
+                    No similar repositories detected. Unique codebase profile.
                   </p>
                 )}
               </div>
