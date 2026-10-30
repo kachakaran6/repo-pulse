@@ -17,7 +17,9 @@
     "format:check": "prettier --check shared server/src/http server/test/characterization.test.ts server/test/setup-env.ts client/src/components/ErrorBoundary.tsx client/src/domain.test.ts eslint.config.js",
     "typecheck": "npm --prefix client run typecheck && npm --prefix server run typecheck",
     "test": "npm --prefix server run test && npm --prefix client run test",
-    "test:a11y": "playwright test",
+    "test:a11y": "playwright test e2e/accessibility.spec.ts",
+    "test:visual": "playwright test e2e/visual-regression.spec.ts",
+    "test:visual:update": "playwright test e2e/visual-regression.spec.ts --update-snapshots",
     "build": "npm --prefix client run build && npm --prefix server run build"
   },
   "devDependencies": {

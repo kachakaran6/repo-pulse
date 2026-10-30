@@ -33,6 +33,7 @@ import { DigestViewV4 } from './components/v4/DigestViewV4.js';
 import { AnalyticsViewV4 } from './components/v4/AnalyticsViewV4.js';
 import { LandingPageV4 } from './components/v4/LandingPageV4.js';
 import { FirstRunExperienceV4 } from './components/v4/onboarding/FirstRunExperienceV4.js';
+import { FeedbackPromptV4 } from './components/v4/FeedbackPromptV4.js';
 import { getDemoRepos, computeDemoStats } from './data/demoRepos.js';
 import { OverviewSkeletonV4 } from './components/v4/OverviewSkeletonV4.js';
 import { useFeatureFlag } from './hooks/useFeatureFlag.js';
@@ -71,7 +72,7 @@ export const App: React.FC = () => {
     if (window.location.pathname === '/share') return 'share';
     return 'overview';
   });
-  const { isV4, version: uiVersion, setVersion: setUiVersion } = useFeatureFlag();
+  const { isV4, version: uiVersion, setVersion: setUiVersion, isScreenV4 } = useFeatureFlag();
   const [isDesignTokensRoute, setIsDesignTokensRoute] = useState<boolean>(
     () =>
       window.location.pathname === '/design-tokens' ||
@@ -580,7 +581,7 @@ export const App: React.FC = () => {
   }
 
   if (isLoading && !user) {
-    if (isV4) {
+    if (isScreenV4('landing')) {
       return (
         <div className="max-w-4xl mx-auto p-6 md:p-12">
           <OverviewSkeletonV4 />
@@ -612,7 +613,7 @@ export const App: React.FC = () => {
       );
     }
 
-    if (isV4) {
+    if (isScreenV4('landing')) {
       return (
         <LandingPageV4
           onGithubLogin={handleGithubLogin}
@@ -658,7 +659,7 @@ export const App: React.FC = () => {
 
   // First-time Onboarding View at /welcome
   if (isWelcomeRoute) {
-    if (isV4) {
+    if (isScreenV4('landing')) {
       return (
         <FirstRunExperienceV4
           candidateRepos={repos.length > 0 ? repos : getDemoRepos()}
@@ -695,7 +696,7 @@ export const App: React.FC = () => {
   }
 
   // Authenticated Application Shell (V4 or V3)
-  const CurrentShell = isV4 ? ShellV4 : Shell;
+  const CurrentShell = isScreenV4('shell') ? ShellV4 : Shell;
 
   return (
     <CurrentShell
@@ -728,7 +729,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'overview' && (
-        isV4 ? (
+        isScreenV4('ledger') ? (
           <OverviewViewV4
             repos={repos}
             summarySentence={summarySentence}
@@ -768,7 +769,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'analytics' && (
-        isV4 ? (
+        isScreenV4('analytics') ? (
           <AnalyticsViewV4 onNavigateShare={() => setActiveTab('share')} />
         ) : (
           <AnalyticsView onNavigateShare={() => setActiveTab('share')} />
@@ -776,7 +777,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'share' && user && (
-        isV4 ? (
+        isScreenV4('digest') ? (
           <DigestViewV4
             user={user}
             repos={repos}
@@ -796,7 +797,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'triage' && (
-        isV4 ? (
+        isScreenV4('triage') ? (
           <TriageViewV4
             repos={repos}
             onDecision={handleTriageDecision}
@@ -815,7 +816,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'archive' && (
-        isV4 ? (
+        isScreenV4('decisions') ? (
           <DecisionsViewV4
             repos={repos}
             onBringBack={handleBringBack}
@@ -827,7 +828,7 @@ export const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        isV4 ? (
+        isScreenV4('settings') ? (
           <SettingsViewV4
             settings={settings}
             installation={installation}
@@ -848,7 +849,7 @@ export const App: React.FC = () => {
 
       {/* Repository Detail Modal (v3) or Slide-over Sheet Drawer (v4) */}
       {selectedRepoForDetail && (
-        isV4 ? (
+        isScreenV4('drawer') ? (
           <RepoDetailDrawerV4
             repo={selectedRepoForDetail}
             allRepos={repos.filter((r) => !r.is_retired)}
@@ -864,6 +865,15 @@ export const App: React.FC = () => {
             onSave={handleSaveRepoDetails}
           />
         )
+      )}
+          {/* Design Feedback Prompt (v4 rollout) */}
+      {isV4 && (
+        <FeedbackPromptV4
+          onSwitchToClassic={() => {
+            setUiVersion('v3');
+            showToast('Switched back to classic view');
+          }}
+        />
       )}
     </CurrentShell>
   );
