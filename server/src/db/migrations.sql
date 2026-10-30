@@ -162,8 +162,15 @@ CREATE TABLE IF NOT EXISTS repo_meta (
   note                TEXT,
   decision            TEXT CHECK (decision IN ('keep', 'pause', 'retire')),
   paused_until        DATE,
-  decided_at          TIMESTAMPTZ
+  decided_at          TIMESTAMPTZ,
+  wip_override        BOOLEAN DEFAULT false
 );
+
+DO $
+BEGIN
+  ALTER TABLE repo_meta ADD COLUMN IF NOT EXISTS wip_override BOOLEAN DEFAULT false;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $;
 
 -- 9. User Settings Table
 CREATE TABLE IF NOT EXISTS settings (
@@ -172,8 +179,15 @@ CREATE TABLE IF NOT EXISTS settings (
   cooling_days        INTEGER NOT NULL DEFAULT 14,
   stale_days          INTEGER NOT NULL DEFAULT 30,
   theme               TEXT NOT NULL DEFAULT 'system',
+  wip_limit           INTEGER DEFAULT 5,
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+DO $
+BEGIN
+  ALTER TABLE settings ADD COLUMN IF NOT EXISTS wip_limit INTEGER DEFAULT 5;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $;
 
 -- 10. Saved Views Table
 CREATE TABLE IF NOT EXISTS saved_views (

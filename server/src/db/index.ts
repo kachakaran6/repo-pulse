@@ -160,6 +160,7 @@ interface MemoryRepoMeta {
   decision?: 'keep' | 'pause' | 'retire' | null;
   paused_until?: string | null;
   decided_at?: Date | null;
+  wip_override?: boolean;
 }
 
 interface MemorySettings {
@@ -168,6 +169,7 @@ interface MemorySettings {
   cooling_days: number;
   stale_days: number;
   theme: string;
+  wip_limit?: number | null;
   updated_at: Date;
 }
 
@@ -335,8 +337,8 @@ export const db = {
       );
       const row = res.rows[0];
       await authPool.query(
-        `INSERT INTO settings (user_id, active_days, cooling_days, stale_days, theme)
-         VALUES ($1, 7, 14, 30, 'system')
+        `INSERT INTO settings (user_id, active_days, cooling_days, stale_days, theme, wip_limit)
+         VALUES ($1, 7, 14, 30, 'system', 5)
          ON CONFLICT (user_id) DO NOTHING`,
         [row.id]
       );
@@ -377,6 +379,7 @@ export const db = {
       cooling_days: 14,
       stale_days: 30,
       theme: 'system',
+      wip_limit: 5,
       updated_at: new Date(),
     });
     return newUser;
@@ -475,17 +478,17 @@ export const db = {
     try {
       return await withTenant(userId, async (client) => {
         const res = await client.query(
-          `SELECT user_id, active_days, cooling_days, stale_days, theme, updated_at
+          `SELECT user_id, active_days, cooling_days, stale_days, theme, wip_limit, updated_at
            FROM settings
            WHERE user_id = $1`,
           [uid]
         );
         if (res.rows.length > 0) return res.rows[0];
         const ins = await client.query(
-          `INSERT INTO settings (user_id, active_days, cooling_days, stale_days, theme)
-           VALUES ($1, 7, 14, 30, 'system')
+          `INSERT INTO settings (user_id, active_days, cooling_days, stale_days, theme, wip_limit)
+           VALUES ($1, 7, 14, 30, 'system', 5)
            ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
-           RETURNING user_id, active_days, cooling_days, stale_days, theme, updated_at`,
+           RETURNING user_id, active_days, cooling_days, stale_days, theme, wip_limit, updated_at`,
           [uid]
         );
         return ins.rows[0];
@@ -499,6 +502,7 @@ export const db = {
           cooling_days: 14,
           stale_days: 30,
           theme: 'system',
+          wip_limit: 5,
           updated_at: new Date(),
         };
         mem.settings.set(uid, s);
@@ -507,7 +511,7 @@ export const db = {
     }
   },
 
-  async updateSettings(userId: string | number, updates: { active_days?: number; cooling_days?: number; stale_days?: number; theme?: string }) {
+  async updateSettings(userId: string | number, updates: { active_days?: number; cooling_days?: number; stale_days?: number; theme?: string; wip_limit?: number | null; wipLimit?: number | null }) {
     const uid = String(userId);
     try {
       return await withTenant(userId, async (client) => {
@@ -516,13 +520,14 @@ export const db = {
         const coolingDays = updates.cooling_days ?? current.cooling_days;
         const staleDays = updates.stale_days ?? current.stale_days;
         const theme = updates.theme ?? current.theme;
+        const wipLimitVal = updates.wip_limit !== undefined ? updates.wip_limit : (updates.wipLimit !== undefined ? updates.wipLimit : (current.wip_limit !== undefined ? current.wip_limit : 5));
 
         const res = await client.query(
           `UPDATE settings
-           SET active_days = $1, cooling_days = $2, stale_days = $3, theme = $4, updated_at = now()
-           WHERE user_id = $5
-           RETURNING user_id, active_days, cooling_days, stale_days, theme, updated_at`,
-          [activeDays, coolingDays, staleDays, theme, uid]
+           SET active_days = $1, cooling_days = $2, stale_days = $3, theme = $4, wip_limit = $5, updated_at = now()
+           WHERE user_id = $6
+           RETURNING user_id, active_days, cooling_days, stale_days, theme, wip_limit, updated_at`,
+          [activeDays, coolingDays, staleDays, theme, wipLimitVal, uid]
         );
         return res.rows[0];
       });
@@ -533,12 +538,15 @@ export const db = {
         cooling_days: 14,
         stale_days: 30,
         theme: 'system',
+        wip_limit: 5,
         updated_at: new Date(),
       };
       if (updates.active_days !== undefined) s.active_days = updates.active_days;
       if (updates.cooling_days !== undefined) s.cooling_days = updates.cooling_days;
       if (updates.stale_days !== undefined) s.stale_days = updates.stale_days;
       if (updates.theme !== undefined) s.theme = updates.theme;
+      if (updates.wip_limit !== undefined) s.wip_limit = updates.wip_limit;
+      else if (updates.wipLimit !== undefined) s.wip_limit = updates.wipLimit;
       s.updated_at = new Date();
       mem.settings.set(uid, s);
       return s;
@@ -556,7 +564,7 @@ export const db = {
                   r.relationship, r.permission, r.default_branch, r.last_commit_at,
                   r.pushed_at, r.created_at_github, r.language,
                   r.archived_on_github, r.synced_at,
-                  m.label, to_char(m.goal_date, 'YYYY-MM-DD') as goal_date, m.note, m.decision, to_char(m.paused_until, 'YYYY-MM-DD') as paused_until, m.decided_at
+                  m.label, to_char(m.goal_date, 'YYYY-MM-DD') as goal_date, m.note, m.decision, to_char(m.paused_until, 'YYYY-MM-DD') as paused_until, m.decided_at, m.wip_override
            FROM repos r
            LEFT JOIN repo_meta m ON r.id = m.repo_id AND m.user_id = r.user_id
            WHERE r.user_id = $1
@@ -618,6 +626,7 @@ export const db = {
               decision: r.decision,
               paused_until: r.paused_until || null,
               decided_at: r.decided_at,
+              wip_override: Boolean(r.wip_override),
             },
             activity: activitiesByRepo[rId] || [],
           };
@@ -668,6 +677,7 @@ export const db = {
             decision: meta?.decision || null,
             paused_until: meta?.paused_until || null,
             decided_at: meta?.decided_at || null,
+            wip_override: Boolean(meta?.wip_override),
           },
           activity: acts,
         };
@@ -843,6 +853,8 @@ export const db = {
     note?: string | null;
     decision?: 'keep' | 'pause' | 'retire' | null;
     paused_until?: string | null;
+    wip_override?: boolean;
+    override?: boolean;
   }) {
     const rId = String(repoId);
     const uid = String(userId);
@@ -850,7 +862,7 @@ export const db = {
     try {
       return await withTenant(userId, async (client) => {
         const existing = await client.query(
-          `SELECT repo_id, user_id, label, goal_date, note, decision, paused_until, decided_at
+          `SELECT repo_id, user_id, label, goal_date, note, decision, paused_until, decided_at, wip_override
            FROM repo_meta
            WHERE repo_id = $1 AND user_id = $2`,
           [rId, uid]
@@ -859,8 +871,8 @@ export const db = {
         const decidedAt = meta.decision !== undefined ? (meta.decision ? new Date() : null) : existing.rows[0]?.decided_at;
 
         const res = await client.query(
-          `INSERT INTO repo_meta (repo_id, user_id, label, goal_date, note, decision, paused_until, decided_at)
-           VALUES ($1, $2, $3, $4::date, $5, $6, $7::date, $8)
+          `INSERT INTO repo_meta (repo_id, user_id, label, goal_date, note, decision, paused_until, decided_at, wip_override)
+           VALUES ($1, $2, $3, $4::date, $5, $6, $7::date, $8, $14)
            ON CONFLICT (repo_id)
            DO UPDATE SET
              label = CASE WHEN $9 THEN $3 ELSE repo_meta.label END,
@@ -868,8 +880,9 @@ export const db = {
              note = CASE WHEN $11 THEN $5 ELSE repo_meta.note END,
              decision = CASE WHEN $12 THEN $6 ELSE repo_meta.decision END,
              paused_until = CASE WHEN $13 THEN $7::date ELSE repo_meta.paused_until END,
-             decided_at = CASE WHEN $12 THEN $8 ELSE repo_meta.decided_at END
-           RETURNING repo_id, user_id, label, to_char(goal_date, 'YYYY-MM-DD') as goal_date, note, decision, to_char(paused_until, 'YYYY-MM-DD') as paused_until, decided_at`,
+             decided_at = CASE WHEN $12 THEN $8 ELSE repo_meta.decided_at END,
+             wip_override = CASE WHEN $15 THEN $14 ELSE repo_meta.wip_override END
+           RETURNING repo_id, user_id, label, to_char(goal_date, 'YYYY-MM-DD') as goal_date, note, decision, to_char(paused_until, 'YYYY-MM-DD') as paused_until, decided_at, wip_override`,
           [
             rId,
             uid,
@@ -884,6 +897,8 @@ export const db = {
             meta.note !== undefined,
             meta.decision !== undefined,
             meta.paused_until !== undefined,
+            (meta.wip_override !== undefined ? meta.wip_override : meta.override) ?? false,
+            meta.wip_override !== undefined || meta.override !== undefined,
           ]
         );
         return res.rows[0];
@@ -902,6 +917,8 @@ export const db = {
         m.decided_at = meta.decision ? new Date() : null;
       }
       if (meta.paused_until !== undefined) m.paused_until = meta.paused_until;
+      if (meta.wip_override !== undefined) m.wip_override = meta.wip_override;
+      else if (meta.override !== undefined) m.wip_override = meta.override;
       return m;
     }
   },

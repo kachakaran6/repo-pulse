@@ -96,6 +96,7 @@ export const repoMeta = pgTable('repo_meta', {
   decision: text('decision').$type<'keep' | 'pause' | 'retire'>(),
   paused_until: date('paused_until'),
   decided_at: timestamp('decided_at', { withTimezone: true }),
+  wip_override: boolean('wip_override').default(false),
 });
 
 export const settings = pgTable('settings', {
@@ -104,6 +105,7 @@ export const settings = pgTable('settings', {
   cooling_days: integer('cooling_days').default(14).notNull(),
   stale_days: integer('stale_days').default(30).notNull(),
   theme: text('theme').default('system').notNull(),
+  wip_limit: integer('wip_limit').default(5),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

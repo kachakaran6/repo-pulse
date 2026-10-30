@@ -29,7 +29,7 @@ test.describe('Visual Regression Suite (Playwright Screenshots)', () => {
   test('Phase 2: Main Ledger View with grouped sections and controls', async ({ page }) => {
     await page.goto('/?demo=true&welcome=false&tab=overview&ui=v4');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('article[aria-label^="Repository"]').first().waitFor({ state: 'visible' });
+    await page.getByRole('article').first().waitFor({ state: 'visible' });
     await page.waitForTimeout(300);
 
     // Verify main ledger view visual snapshot

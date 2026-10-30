@@ -48,6 +48,8 @@ settingsRouter.get('/me', async (req, res) => {
       cooling_days: settings.cooling_days,
       stale_days: settings.stale_days,
       theme: settings.theme,
+      wip_limit: settings.wip_limit !== undefined ? settings.wip_limit : 5,
+      wipLimit: settings.wip_limit !== undefined ? settings.wip_limit : 5,
     },
     installation: installation
       ? {
@@ -86,6 +88,8 @@ settingsRouter.patch('/settings', async (req, res) => {
     cooling_days: z.number().int().min(2).max(180).optional(),
     stale_days: z.number().int().min(3).max(365).optional(),
     theme: z.enum(['light', 'dark', 'system']).optional(),
+    wip_limit: z.number().int().min(1).max(20).nullable().optional(),
+    wipLimit: z.number().int().min(1).max(20).nullable().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -98,6 +102,7 @@ settingsRouter.patch('/settings', async (req, res) => {
   const newActive = parsed.data.active_days ?? current.active_days;
   const newCooling = parsed.data.cooling_days ?? current.cooling_days;
   const newStale = parsed.data.stale_days ?? current.stale_days;
+  const newWipLimit = parsed.data.wip_limit !== undefined ? parsed.data.wip_limit : (parsed.data.wipLimit !== undefined ? parsed.data.wipLimit : current.wip_limit);
 
   // Validate threshold ordering: active < cooling < stale
   const thresholdValidation = thresholdsSchema.safeParse({
@@ -122,6 +127,7 @@ settingsRouter.patch('/settings', async (req, res) => {
     cooling_days: newCooling,
     stale_days: newStale,
     theme: parsed.data.theme ?? current.theme,
+    wip_limit: newWipLimit,
   });
 
   await db.logAudit(userId, 'settings_updated', parsed.data);
@@ -133,6 +139,8 @@ settingsRouter.patch('/settings', async (req, res) => {
       cooling_days: updated.cooling_days,
       stale_days: updated.stale_days,
       theme: updated.theme,
+      wip_limit: updated.wip_limit,
+      wipLimit: updated.wip_limit,
     },
   });
 });

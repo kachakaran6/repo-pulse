@@ -93,6 +93,8 @@ reposRouter.get('/', async (req, res) => {
         decision: meta.decision || null,
         paused_until: meta.paused_until || null,
         decided_at: meta.decided_at ? new Date(meta.decided_at).toISOString() : null,
+        wip_override: Boolean(meta.wip_override),
+        override: Boolean(meta.wip_override),
       },
       is_paused: Boolean(isPaused),
       is_retired: Boolean(isRetired),
@@ -346,6 +348,8 @@ const patchMetaSchema = z.object({
   note: z.string().max(1000).nullable().optional(),
   decision: z.enum(['keep', 'pause', 'retire']).nullable().optional(),
   paused_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  wip_override: z.boolean().optional(),
+  override: z.boolean().optional(),
 });
 
 /**
