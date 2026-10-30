@@ -17,10 +17,13 @@
     "format:check": "prettier --check shared server/src/http server/test/characterization.test.ts server/test/setup-env.ts client/src/components/ErrorBoundary.tsx client/src/domain.test.ts eslint.config.js",
     "typecheck": "npm --prefix client run typecheck && npm --prefix server run typecheck",
     "test": "npm --prefix server run test && npm --prefix client run test",
+    "test:a11y": "playwright test",
     "build": "npm --prefix client run build && npm --prefix server run build"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.64.1",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.6.2",

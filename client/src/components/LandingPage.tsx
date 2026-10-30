@@ -37,6 +37,8 @@ interface LandingPageProps {
   onDevLogin?: () => Promise<void>;
   devEnabled?: boolean;
   onNavigateLegal?: (type: 'privacy' | 'terms') => void;
+  onOpenDesignTokens?: () => void;
+  onOpenComponents?: () => void;
 }
 
 interface SampleRepo {
@@ -109,6 +111,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onDevLogin,
   devEnabled = false,
   onNavigateLegal,
+  onOpenDesignTokens,
+  onOpenComponents,
 }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -746,6 +750,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             >
               Terms of service
             </button>
+            {onOpenDesignTokens && (
+              <button
+                type="button"
+                onClick={onOpenDesignTokens}
+                style={{ background: 'none', border: 'none', color: 'var(--ink-2)', cursor: 'pointer', fontSize: '13px', padding: 0 }}
+              >
+                Design tokens
+              </button>
+            )}
+            {onOpenComponents && (
+              <button
+                type="button"
+                onClick={onOpenComponents}
+                style={{ background: 'none', border: 'none', color: 'var(--ink)', fontWeight: 600, cursor: 'pointer', fontSize: '13px', padding: 0 }}
+              >
+                Components
+              </button>
+            )}
             <a href="https://github.com" target="_blank" rel="noreferrer" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>GitHub</a>
             <a href="mailto:support@repopulse.dev" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Contact</a>
           </div>

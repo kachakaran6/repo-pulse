@@ -15,6 +15,10 @@ interface ShellProps {
   isSyncing: boolean;
   onSignOut: () => Promise<void>;
   onSignOutAll: () => Promise<void>;
+  onOpenDesignTokens?: () => void;
+  onOpenComponents?: () => void;
+  uiVersion?: 'v3' | 'v4';
+  onToggleUiVersion?: () => void;
   children: React.ReactNode;
 }
 
@@ -28,6 +32,10 @@ export const Shell: React.FC<ShellProps> = ({
   isSyncing,
   onSignOut,
   onSignOutAll,
+  onOpenDesignTokens,
+  onOpenComponents,
+  uiVersion,
+  onToggleUiVersion,
   children,
 }) => {
   const triageCount = (stats?.coolingCount || 0) + (stats?.staleCount || 0);
@@ -55,6 +63,10 @@ export const Shell: React.FC<ShellProps> = ({
             onSelectTab={onSelectTab}
             onSignOut={onSignOut}
             onSignOutAll={onSignOutAll}
+            onOpenDesignTokens={onOpenDesignTokens}
+            onOpenComponents={onOpenComponents}
+            uiVersion={uiVersion}
+            onToggleUiVersion={onToggleUiVersion}
           />
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6">{children}</div>

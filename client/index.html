@@ -3,28 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F2F3F1" id="theme-color-meta" />
+    <meta name="theme-color" content="#F9F9F8" id="theme-color-meta" />
     <script>
       (function () {
-        var key = 'repopulse-theme';
-        var stored = localStorage.getItem(key);
-        var root = document.documentElement;
-        var dark =
-          stored === 'dark' ||
-          (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (stored === 'light') {
-          root.setAttribute('data-theme', 'light');
-          root.classList.remove('dark');
-        } else if (stored === 'dark') {
-          root.setAttribute('data-theme', 'dark');
-          root.classList.add('dark');
-        } else {
-          root.removeAttribute('data-theme');
-          if (dark) root.classList.add('dark');
-          else root.classList.remove('dark');
+        try {
+          var root = document.documentElement;
+
+          // 1. Theme (light / dark / system)
+          var themeKey = 'repopulse-theme';
+          var storedTheme = localStorage.getItem(themeKey);
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = storedTheme === 'dark' || (storedTheme !== 'light' && systemDark);
+
+          if (storedTheme === 'light') {
+            root.setAttribute('data-theme', 'light');
+            root.classList.remove('dark');
+          } else if (storedTheme === 'dark') {
+            root.setAttribute('data-theme', 'dark');
+            root.classList.add('dark');
+          } else {
+            root.removeAttribute('data-theme');
+            if (systemDark) root.classList.add('dark');
+            else root.classList.remove('dark');
+          }
+
+          // 2. Curated Accent Palette
+          var storedAccent = localStorage.getItem('repopulse_accent');
+          if (storedAccent) {
+            root.setAttribute('data-accent', storedAccent);
+          } else {
+            root.setAttribute('data-accent', 'charcoal');
+          }
+
+          // 3. Density Mode
+          var storedDensity = localStorage.getItem('repopulse_density');
+          if (storedDensity) {
+            root.setAttribute('data-density', storedDensity);
+          } else {
+            root.setAttribute('data-density', 'comfortable');
+          }
+
+          // 4. Font Choice
+          var storedFont = localStorage.getItem('repopulse_font');
+          if (storedFont) {
+            root.setAttribute('data-font', storedFont);
+          } else {
+            root.setAttribute('data-font', 'sans');
+          }
+
+          // Update theme color meta for mobile browser chrome
+          var meta = document.getElementById('theme-color-meta');
+          if (meta) meta.setAttribute('content', isDark ? '#141517' : '#F9F9F8');
+        } catch (e) {
+          // ignore localStorage access errors
         }
-        var meta = document.getElementById('theme-color-meta');
-        if (meta) meta.setAttribute('content', dark ? '#131413' : '#F2F3F1');
       })();
     </script>
     <title>RepoPulse - GitHub Repository Ledger & Triage</title>
@@ -33,7 +65,7 @@
     <meta name="description" content="A quiet ledger for GitHub developers to keep track of repository activity, cooling projects, and triage decisions." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Schibsted+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
