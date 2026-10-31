@@ -9,6 +9,7 @@ ENV NODE_ENV=development
 COPY client/package*.json ./
 RUN npm ci --include=dev
 
+COPY shared/ /app/shared/
 COPY client/ ./
 RUN npm run build
 
@@ -21,6 +22,7 @@ ENV NODE_ENV=development
 COPY server/package*.json ./
 RUN npm ci --include=dev
 
+COPY shared/ /app/shared/
 COPY server/ ./
 RUN npm run build
 
