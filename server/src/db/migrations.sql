@@ -397,3 +397,46 @@ CREATE TABLE IF NOT EXISTS search_index_settings (
 ALTER TABLE search_index_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY search_index_settings_tenant_isolation ON search_index_settings FOR ALL
   USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
+
+-- 12. Verdicts History & Personalized ML Models
+ALTER TABLE repos ADD COLUMN IF NOT EXISTS stars INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE repos ADD COLUMN IF NOT EXISTS open_issues INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE repos ADD COLUMN IF NOT EXISTS size_kb INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE repos ADD COLUMN IF NOT EXISTS hygiene_score INTEGER;
+
+CREATE TABLE IF NOT EXISTS verdicts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  repo_id BIGINT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  verdict TEXT NOT NULL,
+  previous_verdict TEXT,
+  suggested_verdict TEXT,
+  suggestion_confidence INTEGER,
+  suggestion_source TEXT NOT NULL DEFAULT 'rule_based_cold_start',
+  agreed BOOLEAN,
+  features JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_verdicts_user ON verdicts(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verdicts_repo ON verdicts(repo_id);
+
+ALTER TABLE verdicts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY verdicts_tenant_isolation ON verdicts FOR ALL
+  USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
+
+CREATE TABLE IF NOT EXISTS user_verdict_models (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'cold_start',
+  model_data JSONB,
+  decision_count INTEGER NOT NULL DEFAULT 0,
+  agreement_count INTEGER NOT NULL DEFAULT 0,
+  override_count INTEGER NOT NULL DEFAULT 0,
+  trained_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE user_verdict_models ENABLE ROW LEVEL SECURITY;
+CREATE POLICY user_verdict_models_tenant_isolation ON user_verdict_models FOR ALL
+  USING (user_id = NULLIF(current_setting('app.user_id', true), '')::bigint);
+

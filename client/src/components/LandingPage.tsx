@@ -115,9 +115,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenComponents,
 }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const installed = params.get('installed');
+    if (installed === 'true') {
+      setSuccessNotice('GitHub App installed! Please sign in with GitHub to link and access your repositories.');
+    }
     const errorParam = params.get('error');
     if (errorParam) {
       if (errorParam === 'access_denied') {
@@ -161,7 +166,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <img src="/repopulse-mark.svg" alt="" width={24} height={24} style={{ display: 'block', flexShrink: 0 }} />
               RepoPulse
             </span>
-            <nav style={{ display: 'flex', gap: '24px' }}>
+            <nav className="hidden md:flex gap-6">
               <a href="#how-it-decides" style={{ fontSize: '13px', color: 'var(--ink-2)', textDecoration: 'none' }}>How it works</a>
               <a href="#share-cards" style={{ fontSize: '13px', color: 'var(--ink-2)', textDecoration: 'none' }}>Share cards</a>
               <a href="#privacy-trust" style={{ fontSize: '13px', color: 'var(--ink-2)', textDecoration: 'none' }}>Privacy</a>
@@ -194,6 +199,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </header>
 
+      {/* Success Notice */}
+      {successNotice && (
+        <div style={{
+          maxWidth: '1120px',
+          margin: '20px auto 0 auto',
+          padding: '12px 24px',
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)',
+            border: '1px solid var(--heat-active)',
+            borderRadius: 'var(--r)',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '13px',
+            color: 'var(--ink)',
+          }}>
+            <Check size={16} strokeWidth={1.75} style={{ color: 'var(--heat-active)', flexShrink: 0 }} />
+            <span>{successNotice}</span>
+          </div>
+        </div>
+      )}
+
       {/* Error Notice */}
       {errorMessage && (
         <div style={{
@@ -219,26 +248,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       )}
 
       {/* Hero Section */}
-      <section style={{ maxWidth: '1120px', margin: '0 auto', padding: '64px 24px 80px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '48px', alignItems: 'start' }}>
+      <section style={{ maxWidth: '1120px', margin: '0 auto', padding: '48px 16px 64px 16px' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-12 items-start">
           <div>
-            <h1 style={{
-              fontSize: '56px',
-              lineHeight: 1.08,
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-              margin: '0 0 24px 0',
-              color: 'var(--ink)',
-            }}>
+            <h1 className="text-3xl sm:text-5xl lg:text-[56px] font-bold tracking-tight text-[var(--ink)] leading-[1.08] mb-6">
               Which of your repos are still alive?
             </h1>
-            <p style={{
-              fontSize: '18px',
-              lineHeight: 1.5,
-              color: 'var(--ink-2)',
-              maxWidth: '52ch',
-              margin: '0 0 32px 0',
-            }}>
+            <p className="text-sm sm:text-lg leading-relaxed text-[var(--ink-2)] max-w-[52ch] mb-8">
               RepoPulse reads your GitHub commit history, sorts every repo from active to dead, and helps you decide what to keep, pause or retire.
             </p>
 
@@ -369,11 +385,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             A continuous temperature scale based strictly on your last commit date. Default thresholds can be customized at any time.
           </p>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '16px',
-          }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '20px', backgroundColor: 'var(--paper)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <span style={{ width: '10px', height: '10px', backgroundColor: 'var(--heat-active)', display: 'inline-block' }} />
@@ -419,7 +431,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* Section 2: Decide in seconds (Triage) */}
       <section style={{ padding: '64px 24px', borderTop: '1px solid var(--line)' }}>
-        <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center" style={{ maxWidth: '1120px', margin: '0 auto' }}>
           <div>
             <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 12px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
               Decide in seconds
@@ -488,7 +500,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             Full visibility across every repository you touch, with absolute control over access boundaries.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '24px', backgroundColor: 'var(--paper)' }}>
               <Lock size={20} strokeWidth={1.75} style={{ color: 'var(--ink)', marginBottom: '12px' }} />
               <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 8px 0' }}>
@@ -532,7 +544,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             Turn your commit streaks and repository momentum into clean, high-resolution SVG and PNG cards.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Card Sample 1: Summary */}
             <div style={{
               backgroundColor: 'var(--surface)',
@@ -617,7 +629,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             Built with strict least-privilege principles. No source code ever passes through our servers.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '24px', backgroundColor: 'var(--paper)' }}>
               <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Check size={18} strokeWidth={1.75} style={{ color: 'var(--heat-active)' }} />
@@ -653,7 +665,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 32px 0', letterSpacing: '-0.02em', color: 'var(--ink)' }}>
             Common questions
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <strong style={{ display: 'block', fontSize: '15px', color: 'var(--ink)', marginBottom: '6px' }}>
                 Does RepoPulse require write access?
@@ -723,15 +735,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         backgroundColor: 'var(--surface)',
         padding: '32px 24px',
       }}>
-        <div style={{
-          maxWidth: '1120px',
-          margin: '0 auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: '13px',
-          color: 'var(--ink-2)',
-        }}>
+        <div
+          className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--ink-2)]"
+          style={{ maxWidth: '1120px', margin: '0 auto' }}
+        >
           <div>
             RepoPulse · Built for developers
           </div>

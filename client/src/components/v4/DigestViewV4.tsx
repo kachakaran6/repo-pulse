@@ -57,7 +57,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
           <span>{todayStr}</span>
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-12 font-sans leading-tight">
+        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-neutral-12 font-sans leading-tight">
           {summarySentence || `You committed to ${activeRepos.length} repositories this week.`}
         </h1>
 
@@ -108,7 +108,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
         </div>
 
         {/* Section 1 Suggested Action */}
-        <div className="flex items-center justify-between p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
           <span className="text-neutral-11">
             <strong>Suggested Action:</strong> Lock in weekly progress and update project milestones.
           </span>
@@ -116,7 +116,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
             variant="secondary"
             size="sm"
             onClick={() => toast.success('Active milestones verified')}
-            className="text-xs h-7 gap-1.5 shrink-0"
+            className="text-xs h-7 gap-1.5 shrink-0 self-start sm:self-auto"
           >
             <span>Confirm active work</span>
             <CheckCircle2 size={12} />
@@ -156,7 +156,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
         )}
 
         {/* Section 2 Suggested Action */}
-        <div className="flex items-center justify-between p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
           <span className="text-neutral-11">
             <strong>Suggested Action:</strong> Make a Keep, Pause, or Retire verdict before they go stale.
           </span>
@@ -165,7 +165,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
               variant="primary"
               size="sm"
               onClick={onStartTriage}
-              className="text-xs h-7 gap-1.5 shrink-0"
+              className="text-xs h-7 gap-1.5 shrink-0 self-start sm:self-auto"
             >
               <span>Start Triage Mode</span>
               <ArrowRight size={12} />
@@ -186,20 +186,20 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
           <span className="font-mono text-xs text-neutral-8 tabular">{weeklyCommits} commits total</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="p-4 border border-neutral-4 rounded-xs bg-neutral-2/40">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+          <div className="p-3 sm:p-4 border border-neutral-4 rounded-xs bg-neutral-2/40">
             <span className="text-2xs font-mono text-neutral-8 uppercase block mb-1">Weekly Output</span>
             <span className="font-mono text-2xl font-bold text-neutral-12">{weeklyCommits}</span>
             <span className="text-2xs text-neutral-8 block mt-1">commits pushed</span>
           </div>
 
-          <div className="p-4 border border-neutral-4 rounded-xs bg-neutral-2/40">
+          <div className="p-3 sm:p-4 border border-neutral-4 rounded-xs bg-neutral-2/40">
             <span className="text-2xs font-mono text-neutral-8 uppercase block mb-1">Current Streak</span>
             <span className="font-mono text-2xl font-bold text-neutral-12">{longestStreak}</span>
             <span className="text-2xs text-neutral-8 block mt-1">consecutive days</span>
           </div>
 
-          <div className="p-4 border border-neutral-4 rounded-xs bg-neutral-2/40">
+          <div className="p-3 sm:p-4 border border-neutral-4 rounded-xs bg-neutral-2/40">
             <span className="text-2xs font-mono text-neutral-8 uppercase block mb-1">Active Share</span>
             <span className="font-mono text-2xl font-bold text-neutral-12">
               {Math.round((activeRepos.length / (repos.length || 1)) * 100)}%
@@ -209,7 +209,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
         </div>
 
         {/* Section 3 Suggested Action */}
-        <div className="flex items-center justify-between p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
           <span className="text-neutral-11">
             <strong>Suggested Action:</strong> Export a quiet social snapshot or milestone card.
           </span>
@@ -217,7 +217,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
             variant="secondary"
             size="sm"
             onClick={onNavigateShare || (() => toast.info('Navigating to share generator...'))}
-            className="text-xs h-7 gap-1.5 shrink-0"
+            className="text-xs h-7 gap-1.5 shrink-0 self-start sm:self-auto"
           >
             <Share2 size={12} />
             <span>Create Share Card</span>
@@ -249,7 +249,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
         </div>
 
         {/* Section 4 Suggested Action */}
-        <div className="flex items-center justify-between p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-neutral-2 border border-neutral-4 rounded-xs text-xs">
           <span className="text-neutral-11">
             <strong>Suggested Action:</strong> Review archived decisions and upcoming milestone deadlines.
           </span>
@@ -257,7 +257,7 @@ export const DigestViewV4: React.FC<DigestViewV4Props> = ({
             variant="secondary"
             size="sm"
             onClick={() => toast.success('Weekly agenda confirmed')}
-            className="text-xs h-7 gap-1.5 shrink-0"
+            className="text-xs h-7 gap-1.5 shrink-0 self-start sm:self-auto"
           >
             <span>Confirm agenda</span>
             <CheckCircle2 size={12} />

@@ -38,7 +38,7 @@ function formatRelativeSyncTime(dateStr?: string | null): string {
 const TAB_TITLES: Record<AppTab, string> = {
   overview: 'Ledger',
   analytics: 'Analytics',
-  share: 'Digest',
+  share: 'Cards & Share',
   triage: 'Triage',
   archive: 'Decisions',
   settings: 'Settings',
@@ -199,6 +199,14 @@ export const HeaderV4: React.FC<HeaderV4Props> = ({
             </DropdownMenuLabel>
 
             <DropdownMenuSeparator />
+
+            <DropdownMenuItem onClick={() => onSelectTab('share')}>
+              Cards & Share
+            </DropdownMenuItem>
+
+            <DropdownMenuItem onClick={() => onSelectTab('analytics')}>
+              Portfolio Analytics
+            </DropdownMenuItem>
 
             <DropdownMenuItem onClick={() => onSelectTab('settings')}>
               Settings

@@ -1,6 +1,6 @@
-import type { ActivityStatus, Tag, Verdict } from '@shared';
+import type { ActivityStatus, Tag, Verdict, VerdictSuggestion, VerdictFeatures, VerdictLearningStats } from '@shared';
 
-export type { ActivityStatus, Repo, Tag, Verdict } from '@shared';
+export type { ActivityStatus, Repo, Tag, Verdict, VerdictSuggestion, VerdictFeatures, VerdictLearningStats } from '@shared';
 
 export type RepoStatus = ActivityStatus;
 export type DecisionType = Verdict;
@@ -50,6 +50,10 @@ export interface Repository {
   is_retired: boolean;
   activity: CommitDay[];
   weekly_commits: number;
+  suggested_verdict?: VerdictSuggestion | null;
+  stars?: number;
+  open_issues?: number;
+  hygiene_score?: number | null;
 }
 
 export interface UserSettings {
@@ -73,10 +77,23 @@ export interface InstallationStatus {
   connected: boolean;
   token_connected?: boolean;
   account_login?: string;
-  github_installation_id?: number;
+  github_installation_id?: number | string;
   repository_selection?: string;
   repository_count?: number;
   installation_id?: string | number;
+}
+
+export interface InstallationItem {
+  id: string;
+  account_login: string;
+  account_type?: string;
+  github_installation_id: string;
+  installation_id: string;
+  selection: string;
+  repo_count: number;
+  public_repo_count?: number;
+  private_repo_count?: number;
+  last_synced_at?: string;
 }
 
 export interface SyncStatus {

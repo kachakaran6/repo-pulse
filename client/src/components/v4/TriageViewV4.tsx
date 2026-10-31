@@ -6,6 +6,7 @@ import { LanguageDot } from './ledger/LanguageDot.js';
 import { Button } from './ui/Button.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/Dialog.js';
 import { toast } from './ui/Toast.js';
+import { VerdictSuggestionChip } from './ledger/VerdictSuggestionChip.js';
 import {
   Check,
   Clock,
@@ -21,6 +22,7 @@ import {
   HelpCircle,
   ExternalLink,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 
 interface TriageSessionDecision {
@@ -55,12 +57,19 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
   activeKeepCount,
   onExitTriage,
 }) => {
-  // Candidate pool: cooling and stale repositories not retired or paused
+  // Candidate pool: cooling and stale repositories not retired or paused, sorted by highest confidence first
   const triageCandidates = useMemo(() => {
-    return (repos || []).filter((r) => {
+    const candidates = (repos || []).filter((r) => {
       if (r.is_retired) return false;
       if (r.is_paused) return false;
       return r.status === 'cooling' || r.status === 'stale';
+    });
+
+    // Sort by highest confidence first so easy decisions go fast
+    return candidates.sort((a, b) => {
+      const confA = a.suggested_verdict?.confidence ?? 0;
+      const confB = b.suggested_verdict?.confidence ?? 0;
+      return confB - confA;
     });
   }, [repos]);
 
@@ -165,7 +174,10 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
       );
       if (isInput) return;
 
-      if (e.key === 'k' || e.key === 'K') {
+      if (e.key === 'Enter' && currentRepo?.suggested_verdict?.verdict) {
+        e.preventDefault();
+        commitDecision(currentRepo.suggested_verdict.verdict);
+      } else if (e.key === 'k' || e.key === 'K') {
         e.preventDefault();
         commitDecision('keep');
       } else if (e.key === 'p' || e.key === 'P') {
@@ -387,12 +399,20 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
         </div>
 
         <div className="flex items-center justify-between text-xs text-neutral-9 font-sans">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-medium text-neutral-12">
               {currentIndex + 1} of {triageCandidates.length}
             </span>
             <span className="text-neutral-5">·</span>
             <span>{triageCandidates.length} remaining</span>
+            <span className="text-neutral-5 hidden sm:inline">·</span>
+            <div
+              className="hidden sm:inline-flex items-center gap-1 text-2xs font-mono text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-xs"
+              title="Queue is sorted by model confidence so straightforward decisions can be made first"
+            >
+              <Sparkles size={10} />
+              <span>Highest confidence first</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -500,6 +520,26 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
             {description}
           </p>
         </div>
+
+        {/* Suggested Verdict Banner with Why? Popover */}
+        {currentRepo.suggested_verdict && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xs border border-neutral-4 bg-neutral-2/80">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-neutral-10 font-sans font-medium">Suggestion:</span>
+              <VerdictSuggestionChip
+                suggestion={currentRepo.suggested_verdict}
+                onApplyVerdict={commitDecision}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => commitDecision(currentRepo.suggested_verdict!.verdict)}
+              className="text-2xs font-mono text-neutral-10 hover:text-neutral-12 flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+            >
+              <span>Accept suggestion [ Enter ]</span>
+            </button>
+          </div>
+        )}
 
         {/* Score Breakdown with Reasons */}
         <div className="border border-neutral-4 bg-neutral-2/50 rounded-xs p-3 space-y-2">
@@ -652,6 +692,10 @@ export const TriageViewV4: React.FC<TriageViewV4Props> = ({
             <DialogTitle>Triage Keyboard Shortcuts</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-xs pt-2">
+            <div className="flex items-center justify-between py-1 border-b border-neutral-4">
+              <span>Accept suggested verdict</span>
+              <kbd className="px-1.5 py-0.5 bg-neutral-3 rounded-xs font-mono text-2xs">Enter</kbd>
+            </div>
             <div className="flex items-center justify-between py-1 border-b border-neutral-4">
               <span>Keep repository in active ledger</span>
               <kbd className="px-1.5 py-0.5 bg-neutral-3 rounded-xs font-mono text-2xs">K</kbd>

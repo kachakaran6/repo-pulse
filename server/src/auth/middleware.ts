@@ -26,7 +26,12 @@ declare global {
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const cookieName = env.SESSION_COOKIE_NAME || (env.NODE_ENV === 'production' ? '__Host-sid' : 'sid');
-  const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'];
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7).trim()
+    : undefined;
+  const headerToken = (req.headers['x-session-token'] as string | undefined) || bearerToken;
+  const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'] || headerToken;
 
   if (!token || typeof token !== 'string') {
     sendError(res, 401, 'Unauthorized', 'Authentication required. Please sign in.');

@@ -261,6 +261,31 @@ interface MemorySearchSettings {
   updated_at: Date;
 }
 
+interface MemoryVerdict {
+  id: string;
+  user_id: string;
+  repo_id: string;
+  verdict: 'keep' | 'pause' | 'retire';
+  previous_verdict?: 'keep' | 'pause' | 'retire' | null;
+  suggested_verdict?: 'keep' | 'pause' | 'retire' | null;
+  suggestion_confidence?: number | null;
+  suggestion_source: string;
+  agreed?: boolean | null;
+  features?: any;
+  created_at: Date;
+}
+
+interface MemoryUserVerdictModel {
+  user_id: string;
+  status: string;
+  model_data?: any;
+  decision_count: number;
+  agreement_count: number;
+  override_count: number;
+  trained_at?: Date | null;
+  updated_at: Date;
+}
+
 const mem = {
   users: new Map<string, MemoryUser>(),
   sessions: new Map<string, MemorySession>(),
@@ -276,6 +301,8 @@ const mem = {
   achievements: new Map<string, MemoryAchievement>(),
   chunks: new Map<string, MemoryRepoChunk>(),
   searchSettings: new Map<string, MemorySearchSettings>(),
+  verdicts: new Map<string, MemoryVerdict>(),
+  userVerdictModels: new Map<string, MemoryUserVerdictModel>(),
   syncRuns: [] as any[],
   auditLogs: [] as any[],
   idCounter: 1000,
@@ -412,6 +439,19 @@ export const db = {
       updated_at: new Date(),
     });
     return newUser;
+  },
+
+  async getAllUsers(): Promise<{ id: string; login: string }[]> {
+    try {
+      const res = await authPool.query(
+        `SELECT id, login FROM users WHERE deleted_at IS NULL`
+      );
+      return res.rows.map((r) => ({ id: String(r.id), login: r.login }));
+    } catch {
+      return Array.from(mem.users.values())
+        .filter((u) => !u.deleted_at)
+        .map((u) => ({ id: u.id, login: u.login }));
+    }
   },
 
   // 2. Sessions
@@ -593,6 +633,8 @@ export const db = {
                   r.relationship, r.permission, r.default_branch, r.last_commit_at,
                   r.pushed_at, r.created_at_github, r.language,
                   r.archived_on_github, r.synced_at,
+                  COALESCE(r.stars, 0) as stars, COALESCE(r.open_issues, 0) as open_issues,
+                  COALESCE(r.size_kb, 0) as size_kb, r.hygiene_score,
                   m.label, to_char(m.goal_date, 'YYYY-MM-DD') as goal_date, m.note, m.decision, to_char(m.paused_until, 'YYYY-MM-DD') as paused_until, m.decided_at, m.wip_override
            FROM repos r
            LEFT JOIN repo_meta m ON r.id = m.repo_id AND m.user_id = r.user_id
@@ -647,6 +689,10 @@ export const db = {
             created_at_github: r.created_at_github,
             language: r.language,
             archived_on_github: r.archived_on_github,
+            stars: Number(r.stars || 0),
+            open_issues: Number(r.open_issues || 0),
+            size_kb: Number(r.size_kb || 0),
+            hygiene_score: r.hygiene_score !== null && r.hygiene_score !== undefined ? Number(r.hygiene_score) : null,
             synced_at: r.synced_at,
             meta: {
               label: r.label,
@@ -698,6 +744,10 @@ export const db = {
           created_at_github: r.created_at_github || null,
           language: r.language || null,
           archived_on_github: r.archived_on_github,
+          stars: Number((r as any).stars || 0),
+          open_issues: Number((r as any).open_issues || 0),
+          size_kb: Number((r as any).size_kb || 0),
+          hygiene_score: (r as any).hygiene_score !== null && (r as any).hygiene_score !== undefined ? Number((r as any).hygiene_score) : null,
           synced_at: r.synced_at,
           meta: {
             label: meta?.label || null,
@@ -1862,5 +1912,261 @@ export const db = {
     });
     return true;
   },
+
+  // 12. Personalized Verdicts & Learning
+  async recordVerdict(
+    userId: string | number,
+    repoId: string | number,
+    verdict: 'keep' | 'pause' | 'retire',
+    details: {
+      previousVerdict?: 'keep' | 'pause' | 'retire' | null;
+      suggestedVerdict?: 'keep' | 'pause' | 'retire' | null;
+      suggestionConfidence?: number | null;
+      suggestionSource?: string;
+      agreed?: boolean | null;
+      features?: any;
+      createdAt?: Date;
+    } = {}
+  ) {
+    const uid = String(userId);
+    const rid = String(repoId);
+    const createdAt = details.createdAt || new Date();
+    const source = details.suggestionSource || 'rule_based_cold_start';
+    const conf = details.suggestionConfidence !== undefined && details.suggestionConfidence !== null
+      ? Math.round(details.suggestionConfidence * 10000)
+      : null;
+
+    try {
+      return await withTenant(userId, async (client) => {
+        const res = await client.query(
+          `INSERT INTO verdicts (user_id, repo_id, verdict, previous_verdict, suggested_verdict, suggestion_confidence, suggestion_source, agreed, features, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING id, user_id, repo_id, verdict, previous_verdict, suggested_verdict, suggestion_confidence, suggestion_source, agreed, features, created_at`,
+          [
+            uid,
+            rid,
+            verdict,
+            details.previousVerdict ?? null,
+            details.suggestedVerdict ?? null,
+            conf,
+            source,
+            details.agreed ?? null,
+            details.features ? JSON.stringify(details.features) : null,
+            createdAt,
+          ]
+        );
+
+        await client.query(
+          `INSERT INTO user_verdict_models (user_id, status, decision_count, agreement_count, override_count, updated_at)
+           VALUES ($1, 'cold_start', 1, CASE WHEN $2 = true THEN 1 ELSE 0 END, CASE WHEN $2 = false THEN 1 ELSE 0 END, now())
+           ON CONFLICT (user_id) DO UPDATE SET
+             decision_count = user_verdict_models.decision_count + 1,
+             agreement_count = user_verdict_models.agreement_count + (CASE WHEN $2 = true THEN 1 ELSE 0 END),
+             override_count = user_verdict_models.override_count + (CASE WHEN $2 = false THEN 1 ELSE 0 END),
+             updated_at = now()`,
+          [uid, details.agreed ?? null]
+        );
+
+        return res.rows[0];
+      });
+    } catch {
+      const id = mem.nextId();
+      const v: MemoryVerdict = {
+        id,
+        user_id: uid,
+        repo_id: rid,
+        verdict,
+        previous_verdict: details.previousVerdict ?? null,
+        suggested_verdict: details.suggestedVerdict ?? null,
+        suggestion_confidence: conf,
+        suggestion_source: source,
+        agreed: details.agreed ?? null,
+        features: details.features || null,
+        created_at: createdAt,
+      };
+      mem.verdicts.set(id, v);
+
+      let model = mem.userVerdictModels.get(uid);
+      if (!model) {
+        model = {
+          user_id: uid,
+          status: 'cold_start',
+          model_data: null,
+          decision_count: 0,
+          agreement_count: 0,
+          override_count: 0,
+          trained_at: null,
+          updated_at: new Date(),
+        };
+        mem.userVerdictModels.set(uid, model);
+      }
+      model.decision_count++;
+      if (details.agreed === true) model.agreement_count++;
+      if (details.agreed === false) model.override_count++;
+      model.updated_at = new Date();
+
+      return v;
+    }
+  },
+
+  async getUserVerdicts(userId: string | number, limit = 1000) {
+    const uid = String(userId);
+    try {
+      return await withTenant(userId, async (client) => {
+        const res = await client.query(
+          `SELECT id, user_id, repo_id, verdict, previous_verdict, suggested_verdict, suggestion_confidence, suggestion_source, agreed, features, created_at
+           FROM verdicts
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT $2`,
+          [uid, limit]
+        );
+        return res.rows.map((row) => ({
+          ...row,
+          features: typeof row.features === 'string' ? JSON.parse(row.features) : row.features,
+          suggestion_confidence: row.suggestion_confidence !== null ? row.suggestion_confidence / 10000 : null,
+        }));
+      });
+    } catch {
+      const list = Array.from(mem.verdicts.values())
+        .filter((v) => v.user_id === uid)
+        .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+        .slice(0, limit)
+        .map((v) => ({
+          ...v,
+          suggestion_confidence: v.suggestion_confidence !== null && v.suggestion_confidence !== undefined ? v.suggestion_confidence / 10000 : null,
+        }));
+      return list;
+    }
+  },
+
+  async getUserVerdictModel(userId: string | number) {
+    const uid = String(userId);
+    try {
+      return await withTenant(userId, async (client) => {
+        const res = await client.query(
+          `SELECT user_id, status, model_data, decision_count, agreement_count, override_count, trained_at, updated_at
+           FROM user_verdict_models
+           WHERE user_id = $1`,
+          [uid]
+        );
+        if (res.rows[0]) {
+          const row = res.rows[0];
+          return {
+            ...row,
+            model_data: typeof row.model_data === 'string' ? JSON.parse(row.model_data) : row.model_data,
+          };
+        }
+        return {
+          user_id: uid,
+          status: 'cold_start',
+          model_data: null,
+          decision_count: 0,
+          agreement_count: 0,
+          override_count: 0,
+          trained_at: null,
+          updated_at: new Date(),
+        };
+      });
+    } catch {
+      const m = mem.userVerdictModels.get(uid);
+      if (m) return m;
+      return {
+        user_id: uid,
+        status: 'cold_start',
+        model_data: null,
+        decision_count: 0,
+        agreement_count: 0,
+        override_count: 0,
+        trained_at: null,
+        updated_at: new Date(),
+      };
+    }
+  },
+
+  async saveUserVerdictModel(
+    userId: string | number,
+    data: {
+      status?: string;
+      model_data?: any;
+      decision_count?: number;
+      trained_at?: Date | null;
+    }
+  ) {
+    const uid = String(userId);
+    try {
+      return await withTenant(userId, async (client) => {
+        const res = await client.query(
+          `INSERT INTO user_verdict_models (user_id, status, model_data, decision_count, trained_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, now())
+           ON CONFLICT (user_id) DO UPDATE SET
+             status = COALESCE($2, user_verdict_models.status),
+             model_data = CASE WHEN $6 THEN $3 ELSE user_verdict_models.model_data END,
+             decision_count = COALESCE($4, user_verdict_models.decision_count),
+             trained_at = CASE WHEN $7 THEN $5 ELSE user_verdict_models.trained_at END,
+             updated_at = now()
+           RETURNING user_id, status, model_data, decision_count, agreement_count, override_count, trained_at, updated_at`,
+          [
+            uid,
+            data.status || 'cold_start',
+            data.model_data ? JSON.stringify(data.model_data) : null,
+            data.decision_count ?? 0,
+            data.trained_at ?? new Date(),
+            data.model_data !== undefined,
+            data.trained_at !== undefined,
+          ]
+        );
+        return res.rows[0];
+      });
+    } catch {
+      let m = mem.userVerdictModels.get(uid);
+      if (!m) {
+        m = {
+          user_id: uid,
+          status: data.status || 'cold_start',
+          model_data: data.model_data || null,
+          decision_count: data.decision_count || 0,
+          agreement_count: 0,
+          override_count: 0,
+          trained_at: data.trained_at ?? new Date(),
+          updated_at: new Date(),
+        };
+        mem.userVerdictModels.set(uid, m);
+      } else {
+        if (data.status !== undefined) m.status = data.status;
+        if (data.model_data !== undefined) m.model_data = data.model_data;
+        if (data.decision_count !== undefined) m.decision_count = data.decision_count;
+        if (data.trained_at !== undefined) m.trained_at = data.trained_at;
+        m.updated_at = new Date();
+      }
+      return m;
+    }
+  },
+
+  async resetUserVerdictPersonalization(userId: string | number) {
+    const uid = String(userId);
+    try {
+      await withTenant(userId, async (client) => {
+        await client.query(
+          `UPDATE user_verdict_models
+           SET status = 'cold_start', model_data = null, trained_at = null, agreement_count = 0, override_count = 0, updated_at = now()
+           WHERE user_id = $1`,
+          [uid]
+        );
+      });
+    } catch {
+      const m = mem.userVerdictModels.get(uid);
+      if (m) {
+        m.status = 'cold_start';
+        m.model_data = null;
+        m.trained_at = null;
+        m.agreement_count = 0;
+        m.override_count = 0;
+        m.updated_at = new Date();
+      }
+    }
+    return true;
+  },
+
 
 };

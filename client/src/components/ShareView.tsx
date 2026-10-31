@@ -640,69 +640,85 @@ export const ShareView: React.FC<ShareViewProps> = ({
   const previewBorderColor = isHeatAccent ? '#F2664F' : (isDark ? '#2E302D' : '#DADDDA');
 
   return (
-    <div className="share-view" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div className="share-view space-y-6 sm:space-y-8 w-full max-w-full font-sans">
       {/* View Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px 0' }}>
-            Share cards
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-12 m-0 tracking-tight">
+            Share Cards & Public Links
           </h1>
-          <p style={{ fontSize: '13px', color: 'var(--ink-2)', margin: 0 }}>
-            Generate high-resolution SVG and PNG momentum cards for your repositories and streaks.
+          <p className="text-xs sm:text-sm text-neutral-9 m-0 mt-1">
+            Generate high-resolution momentum cards, save public snapshots, and share your verified streak link with others.
           </p>
         </div>
 
         {actionFeedback && (
-          <div
-            style={{
-              padding: '6px 14px',
-              backgroundColor: 'var(--ink)',
-              color: 'var(--paper)',
-              borderRadius: 'var(--r)',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <CheckCircle2 size={14} />
-            {actionFeedback}
+          <div className="px-3.5 py-1.5 bg-neutral-12 text-neutral-1 rounded-xs text-xs font-medium flex items-center gap-1.5 self-start sm:self-auto shadow-subtle animate-in fade-in">
+            <CheckCircle2 size={14} className="text-verdict-keep-text" />
+            <span>{actionFeedback}</span>
           </div>
         )}
       </div>
 
-      {/* Editor Main Grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '380px 1fr',
-          gap: '32px',
-          alignItems: 'start',
-        }}
-      >
+      {/* Active snapshot live banner (if just created) */}
+      {createdSlug && (
+        <div className="p-4 bg-verdict-keep-bg/30 border border-verdict-keep-border/70 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-subtle animate-in fade-in">
+          <div className="min-w-0">
+            <div className="font-semibold text-neutral-12 flex items-center gap-1.5">
+              <CheckCircle2 size={15} className="text-verdict-keep-text shrink-0" />
+              <span>Card snapshot live! Ready to share your link.</span>
+            </div>
+            <a
+              href={`/s/${createdSlug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-2xs text-neutral-11 hover:text-neutral-12 underline mt-1 inline-flex items-center gap-1 truncate max-w-full"
+            >
+              <span>{window.location.origin}/s/{createdSlug}</span>
+              <ExternalLink size={10} />
+            </a>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-neutral-12 text-neutral-1 hover:bg-neutral-11 font-medium transition-colors text-xs cursor-pointer shadow-xs"
+              onClick={() => copyPublicLink(createdSlug)}
+            >
+              <Copy size={13} />
+              <span>{copyStatus || 'Copy Link'}</span>
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xs border border-neutral-5 hover:border-neutral-12 bg-neutral-1 text-neutral-12 font-medium transition-colors text-xs cursor-pointer"
+              onClick={() => shareToX(createdSlug)}
+            >
+              <span>Share to X</span>
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xs border border-neutral-5 hover:border-neutral-12 bg-neutral-1 text-neutral-12 font-medium transition-colors text-xs cursor-pointer"
+              onClick={() => shareToLinkedIn(createdSlug)}
+            >
+              <span>LinkedIn</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Editor Main Grid (Responsive 1-col on mobile, 2-col on desktop) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 lg:gap-8 items-start w-full">
         {/* Controls Column */}
-        <div
-          style={{
-            backgroundColor: 'var(--surface)',
-            border: '1px solid var(--line)',
-            borderRadius: 'var(--r)',
-            padding: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            boxSizing: 'border-box',
-          }}
-        >
+        <div className="w-full bg-neutral-2 border border-neutral-4 rounded-xs p-4 sm:p-6 flex flex-col gap-5 box-border">
           {/* Template Picker */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Template
+            <label className="block text-2xs font-semibold text-neutral-9 uppercase tracking-wider mb-2 font-mono">
+              Card Template
             </label>
             <select
               value={template}
               onChange={(e) => setTemplate(e.target.value as any)}
-              className="filter-select"
+              className="w-full h-9 px-3 text-xs bg-neutral-1 border border-neutral-5 rounded-xs text-neutral-12 focus:border-neutral-12 focus:ring-1 focus:ring-neutral-12 outline-none font-sans"
             >
               <option value="summary">Summary stats</option>
               <option value="streak">Streak & velocity</option>
@@ -715,10 +731,10 @@ export const ShareView: React.FC<ShareViewProps> = ({
 
           {/* Aspect Ratio */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Aspect ratio
+            <label className="block text-2xs font-semibold text-neutral-9 uppercase tracking-wider mb-2 font-mono">
+              Aspect Ratio
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { label: '1200 × 630 (Link)', val: '1200x630' },
                 { label: '1080 × 1080 (Square)', val: '1080x1080' },
@@ -729,19 +745,11 @@ export const ShareView: React.FC<ShareViewProps> = ({
                   key={s.val}
                   type="button"
                   onClick={() => setSize(s.val as any)}
-                  style={{
-                    padding: '8px 10px',
-                    fontSize: '12px',
-                    borderRadius: 'var(--r)',
-                    border: '1px solid',
-                    borderColor: size === s.val ? 'var(--ink)' : 'var(--line)',
-                    backgroundColor: size === s.val ? 'var(--surface-2)' : 'transparent',
-                    color: 'var(--ink)',
-                    fontWeight: size === s.val ? 600 : 400,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all var(--transition)',
-                  }}
+                  className={`p-2 sm:p-2.5 text-xs rounded-xs border text-left transition-all cursor-pointer touch-manipulation ${
+                    size === s.val
+                      ? 'border-neutral-12 bg-neutral-3 text-neutral-12 font-semibold shadow-xs'
+                      : 'border-neutral-4 bg-neutral-1 text-neutral-10 hover:border-neutral-7 hover:text-neutral-12'
+                  }`}
                 >
                   {s.label}
                 </button>
@@ -750,15 +758,15 @@ export const ShareView: React.FC<ShareViewProps> = ({
           </div>
 
           {/* Theme & Period */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <label className="block text-2xs font-semibold text-neutral-9 uppercase tracking-wider mb-2 font-mono">
                 Theme
               </label>
               <select
                 value={theme}
                 onChange={(e) => setTheme(e.target.value as any)}
-                className="filter-select"
+                className="w-full h-9 px-3 text-xs bg-neutral-1 border border-neutral-5 rounded-xs text-neutral-12 focus:border-neutral-12 focus:ring-1 focus:ring-neutral-12 outline-none font-sans"
               >
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
@@ -767,13 +775,13 @@ export const ShareView: React.FC<ShareViewProps> = ({
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <label className="block text-2xs font-semibold text-neutral-9 uppercase tracking-wider mb-2 font-mono">
                 Period
               </label>
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value as any)}
-                className="filter-select"
+                className="w-full h-9 px-3 text-xs bg-neutral-1 border border-neutral-5 rounded-xs text-neutral-12 focus:border-neutral-12 focus:ring-1 focus:ring-neutral-12 outline-none font-sans"
               >
                 <option value="7d">7 days</option>
                 <option value="30d">30 days</option>
@@ -785,19 +793,18 @@ export const ShareView: React.FC<ShareViewProps> = ({
 
           {/* Headline & Subtitle */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-2xs font-semibold text-neutral-9 uppercase tracking-wider font-mono">
                 Headline
               </label>
               <button
                 type="button"
-                className="btn-quiet"
                 onClick={handleResetDefaults}
-                style={{ fontSize: '11px', padding: 0 }}
+                className="inline-flex items-center gap-1 text-2xs text-neutral-8 hover:text-neutral-12 cursor-pointer font-sans"
                 title="Reset text to defaults"
               >
-                <RotateCcw size={11} />
-                Reset
+                <RotateCcw size={10} />
+                <span>Reset</span>
               </button>
             </div>
             <input
@@ -805,12 +812,12 @@ export const ShareView: React.FC<ShareViewProps> = ({
               value={title}
               maxLength={80}
               onChange={(e) => setTitle(e.target.value)}
-              className="search-input"
+              className="w-full h-9 px-3 text-xs bg-neutral-1 border border-neutral-5 rounded-xs text-neutral-12 focus:border-neutral-12 focus:ring-1 focus:ring-neutral-12 outline-none font-sans"
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <label className="block text-2xs font-semibold text-neutral-9 uppercase tracking-wider mb-2 font-mono">
               Subtitle text
             </label>
             <input
@@ -818,65 +825,68 @@ export const ShareView: React.FC<ShareViewProps> = ({
               value={subtitle}
               maxLength={120}
               onChange={(e) => setSubtitle(e.target.value)}
-              className="search-input"
+              className="w-full h-9 px-3 text-xs bg-neutral-1 border border-neutral-5 rounded-xs text-neutral-12 focus:border-neutral-12 focus:ring-1 focus:ring-neutral-12 outline-none font-sans"
             />
           </div>
 
           {/* Privacy & Attribution */}
-          <div style={{ borderTop: '1px solid var(--line)', paddingTop: '16px' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <div className="border-t border-neutral-4 pt-4">
+            <label className="block text-2xs font-semibold text-neutral-9 uppercase tracking-wider mb-3 font-mono">
               Privacy & attribution
             </label>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)', cursor: 'pointer' }}>
+            <div className="flex flex-col gap-2.5">
+              <label className="flex items-center gap-2 text-xs text-neutral-11 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={hidePrivateNames}
                   onChange={handleTogglePrivateNames}
+                  className="rounded-[2px] border-neutral-6 text-neutral-12 focus:ring-1 focus:ring-neutral-12 cursor-pointer"
                 />
-                Hide private repository names
+                <span>Hide private repository names</span>
               </label>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)', cursor: 'pointer' }}>
+              <label className="flex items-center gap-2 text-xs text-neutral-11 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={hideAllRepoNames}
                   onChange={(e) => setHideAllRepoNames(e.target.checked)}
+                  className="rounded-[2px] border-neutral-6 text-neutral-12 focus:ring-1 focus:ring-neutral-12 cursor-pointer"
                 />
-                Anonymize all repository names
+                <span>Anonymize all repository names</span>
               </label>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)', cursor: 'pointer' }}>
+              <label className="flex items-center gap-2 text-xs text-neutral-11 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={watermark}
                   onChange={(e) => setWatermark(e.target.checked)}
+                  className="rounded-[2px] border-neutral-6 text-neutral-12 focus:ring-1 focus:ring-neutral-12 cursor-pointer"
                 />
-                Include watermark
+                <span>Include RepoPulse watermark</span>
               </label>
             </div>
           </div>
 
           {/* Direct Export Buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+          <div className="grid grid-cols-2 gap-2 mt-1">
             <button
               type="button"
-              className="btn-secondary"
+              className="h-9 px-3 rounded-xs border border-neutral-5 hover:border-neutral-12 bg-neutral-1 text-neutral-11 hover:text-neutral-12 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               onClick={handleDownloadSvg}
               title="Download vector SVG file"
             >
-              <Download size={14} />
-              Save SVG
+              <Download size={13} />
+              <span>Save SVG</span>
             </button>
             <button
               type="button"
-              className="btn-secondary"
+              className="h-9 px-3 rounded-xs border border-neutral-5 hover:border-neutral-12 bg-neutral-1 text-neutral-11 hover:text-neutral-12 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               onClick={handleDownloadPng}
               title="Download high-res PNG image"
             >
-              <ImageIcon size={14} />
-              Save PNG
+              <ImageIcon size={13} />
+              <span>Save PNG</span>
             </button>
           </div>
 
@@ -884,39 +894,27 @@ export const ShareView: React.FC<ShareViewProps> = ({
           <button
             id="create-card-btn"
             type="button"
-            className="btn-primary"
+            className="w-full h-10 px-4 bg-neutral-12 text-neutral-1 hover:bg-neutral-11 transition-colors rounded-xs text-xs font-semibold flex items-center justify-center gap-2 shadow-xs cursor-pointer touch-manipulation disabled:opacity-50"
             onClick={handleCreateSnapshot}
             disabled={isSaving}
-            style={{ width: '100%', justifyContent: 'center' }}
           >
-            {isSaving ? 'Creating snapshot...' : 'Generate public share card'}
+            <Share2 size={14} />
+            <span>{isSaving ? 'Saving Card Snapshot...' : 'Save Card & Create Public Link'}</span>
           </button>
         </div>
 
         {/* Live Preview Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+        <div className="flex flex-col gap-4 min-w-0 w-full overflow-hidden">
           {/* Card Preview Container */}
           <div
-            style={{
-              backgroundColor: previewBgColor,
-              border: `1px solid var(--line)`,
-              borderRadius: 'var(--r)',
-              padding: '24px',
-              overflow: 'hidden',
-            }}
+            className="w-full rounded-xs p-3 sm:p-6 overflow-hidden border border-neutral-4"
+            style={{ backgroundColor: previewBgColor }}
           >
             <div
+              className="w-full rounded-sm p-4 sm:p-8 min-h-[340px] flex flex-col justify-between overflow-x-auto shadow-elevation-1 transition-all"
               style={{
                 backgroundColor: previewSurfaceColor,
                 border: `1px solid ${previewBorderColor}`,
-                borderRadius: '8px',
-                padding: '32px',
-                minHeight: '380px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                boxShadow: isDark ? '0 10px 30px rgba(0,0,0,0.5)' : '0 10px 30px rgba(0,0,0,0.05)',
-                transition: 'all var(--transition)',
               }}
             >
               {/* Card Header */}
@@ -1152,128 +1150,98 @@ export const ShareView: React.FC<ShareViewProps> = ({
             </button>
           </div>
 
-          {/* Quick Actions for active snapshot */}
-          {createdSlug && (
-            <div
-              style={{
-                backgroundColor: 'var(--surface)',
-                border: '1px solid var(--line)',
-                borderRadius: 'var(--r)',
-                padding: '16px 20px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '12px',
-              }}
-            >
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>Snapshot live: </span>
-                <a
-                  href={`/s/${createdSlug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: '13px', color: 'var(--heat-stale)', textDecoration: 'underline' }}
-                >
-                  /s/{createdSlug}
-                </a>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => copyPublicLink(createdSlug)}
-                >
-                  <Copy size={14} />
-                  {copyStatus || 'Copy link'}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => shareToX(createdSlug)}
-                >
-                  Share to X
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => shareToLinkedIn(createdSlug)}
-                >
-                  LinkedIn
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Existing Snapshots Ledger */}
-      {snapshots.length > 0 && (
-        <div style={{ marginTop: '24px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '12px' }}>
-            My cards
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* Existing Snapshots & Shared Links Ledger */}
+      <div className="mt-8 pt-6 border-t border-neutral-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm sm:text-base font-bold text-neutral-12 m-0 tracking-tight">
+              My Cards & Public Links ({snapshots.length})
+            </h2>
+            <p className="text-xs text-neutral-9 m-0 mt-0.5">
+              Live snapshots you've generated. Anyone with the link can view your verified stats.
+            </p>
+          </div>
+        </div>
+
+        {snapshots.length === 0 ? (
+          <div className="p-6 border border-neutral-4 rounded-xs bg-neutral-2/50 text-center space-y-2">
+            <p className="text-xs text-neutral-10 m-0">
+              You haven't generated any public share cards yet.
+            </p>
+            <p className="text-2xs text-neutral-8 m-0">
+              Click <strong>"Save Card & Create Public Link"</strong> above to publish your first verified snapshot!
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
             {snapshots.map((s) => (
               <div
                 key={s.id || s.slug}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px 16px',
-                  backgroundColor: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 'var(--r)',
-                  flexWrap: 'wrap',
-                  gap: '12px',
-                }}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-neutral-2 border border-neutral-4 rounded-xs text-xs"
               >
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
+                <div className="min-w-0">
+                  <div className="font-semibold text-neutral-12 truncate">
                     {s.title || 'RepoPulse Card'}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
-                    Template: {s.template} · Created: {new Date(s.created_at).toLocaleDateString()}
+                  <div className="text-2xs text-neutral-8 mt-0.5">
+                    Template: {s.template} · Created {new Date(s.created_at).toLocaleDateString()}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-2xs font-mono text-neutral-10">
+                    <span className="text-neutral-7">Link:</span>
+                    <a
+                      href={`/s/${s.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-neutral-11 hover:text-neutral-12 underline truncate"
+                    >
+                      /s/{s.slug}
+                    </a>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-neutral-4 flex-wrap">
                   <a
                     href={`/s/${s.slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn-quiet"
-                    style={{ fontSize: '12px', textDecoration: 'none' }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xs border border-neutral-5 hover:border-neutral-12 text-neutral-11 hover:text-neutral-12 bg-neutral-1 font-medium transition-colors text-xs"
                   >
-                    <ExternalLink size={14} />
-                    View
+                    <ExternalLink size={12} />
+                    <span>View</span>
                   </a>
                   <button
                     type="button"
-                    className="btn-quiet"
                     onClick={() => copyPublicLink(s.slug)}
-                    style={{ fontSize: '12px' }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xs border border-neutral-5 hover:border-neutral-12 text-neutral-11 hover:text-neutral-12 bg-neutral-1 font-medium transition-colors text-xs cursor-pointer"
                   >
-                    <Copy size={14} />
-                    Copy
+                    <Copy size={12} />
+                    <span>{copyStatus === s.slug ? 'Copied!' : 'Copy Link'}</span>
                   </button>
                   <button
                     type="button"
-                    className="btn-quiet"
-                    onClick={() => handleRevokeSnapshot(s.slug)}
-                    style={{ fontSize: '12px', color: 'var(--heat-active)' }}
+                    onClick={() => shareToX(s.slug)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xs border border-neutral-5 hover:border-neutral-12 text-neutral-11 hover:text-neutral-12 bg-neutral-1 font-medium transition-colors text-xs cursor-pointer"
                   >
-                    <Trash2 size={14} />
-                    Revoke
+                    <span>Share on X</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRevokeSnapshot(s.slug)}
+                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xs text-heat-active hover:bg-heat-active/10 transition-colors text-xs cursor-pointer"
+                    title="Revoke public card link"
+                  >
+                    <Trash2 size={12} />
+                    <span>Revoke</span>
                   </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Privacy Confirmation Modal */}
       {showPrivacyConfirm && (

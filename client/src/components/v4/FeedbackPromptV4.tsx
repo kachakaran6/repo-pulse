@@ -85,7 +85,7 @@ export const FeedbackPromptV4: React.FC<FeedbackPromptV4Props> = ({ onSwitchToCl
         transition={{ duration: 0.22, ease: 'easeOut' }}
         role="region"
         aria-label="Design feedback prompt"
-        className="fixed z-40 bottom-20 md:bottom-6 right-4 md:right-6 max-w-sm w-[calc(100vw-2rem)] md:w-84 bg-neutral-1 border border-neutral-5 rounded-md p-3.5 shadow-lg font-sans"
+        className="fixed z-40 bottom-36 md:bottom-6 right-4 md:right-6 max-w-sm w-[calc(100vw-2rem)] md:w-84 bg-neutral-1 border border-neutral-5 rounded-md p-3.5 shadow-modal font-sans"
       >
         {isSubmitted ? (
           <div className="flex items-center gap-2.5 text-xs text-neutral-12 py-1 font-sans">

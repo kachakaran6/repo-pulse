@@ -52,8 +52,10 @@ export interface FirstRunExperienceV4Props {
   initialStep?: OnboardingStep;
   candidateRepos: Repository[];
   user: UserProfile | null;
+  installUrl?: string | null;
   onGithubLogin: () => void;
   onTryDemo: () => void;
+  onRefreshRepos?: () => Promise<void>;
   onCompleteOnboarding: (
     finalRepos: Repository[],
     decisions: Record<number, 'keep' | 'pause' | 'retire'>
@@ -66,12 +68,15 @@ export const FirstRunExperienceV4: React.FC<FirstRunExperienceV4Props> = ({
   initialStep = 'connect',
   candidateRepos,
   user,
+  installUrl,
   onGithubLogin,
   onTryDemo,
+  onRefreshRepos,
   onCompleteOnboarding,
   onExitOnboarding,
   isDemoMode = false,
 }) => {
+  const [isRefreshingCandidateRepos, setIsRefreshingCandidateRepos] = useState(false);
   // If user is already authenticated or in demo mode, skip connect and go to select
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(() => {
     if (initialStep) return initialStep;
@@ -402,31 +407,60 @@ export const FirstRunExperienceV4: React.FC<FirstRunExperienceV4Props> = ({
 
             {/* Path Options */}
             <div className="space-y-4 pt-2">
-              {/* Option A: GitHub App OAuth */}
+              {/* Option A: GitHub App OAuth / Connected Identity */}
               <div className="p-5 border border-neutral-5 rounded-xs bg-neutral-2/50 space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-sm font-semibold text-neutral-12 flex items-center gap-2">
                       <GithubIcon size={16} />
-                      <span>Continue with GitHub</span>
+                      <span>{user ? `Signed in as @${user.login}` : 'Continue with GitHub'}</span>
                     </h2>
                     <p className="text-xs text-neutral-9 mt-1 leading-normal">
-                      Connect your GitHub account or organization with read-only repository metadata.
-                      You choose which repositories to track in the next step.
+                      {user
+                        ? 'Your GitHub identity is authenticated with read-only repository metadata permissions.'
+                        : 'Connect your GitHub account or organization with read-only repository metadata. You choose which repositories to track in the next step.'}
                     </p>
                   </div>
                 </div>
 
-                <Button
-                  id="onboarding-github-connect-btn"
-                  variant="primary"
-                  size="md"
-                  onClick={onGithubLogin}
-                  className="w-full sm:w-auto"
-                >
-                  <GithubIcon size={15} className="mr-2" />
-                  Connect GitHub Account
-                </Button>
+                <div className="flex flex-wrap items-center gap-3">
+                  {user ? (
+                    <Button
+                      id="onboarding-select-repos-btn"
+                      variant="primary"
+                      size="md"
+                      onClick={() => setCurrentStep('select')}
+                      className="w-full sm:w-auto"
+                    >
+                      <span>Choose Repositories to Track</span>
+                      <ArrowRight size={14} className="ml-2" />
+                    </Button>
+                  ) : (
+                    <Button
+                      id="onboarding-github-connect-btn"
+                      variant="primary"
+                      size="md"
+                      onClick={onGithubLogin}
+                      className="w-full sm:w-auto"
+                    >
+                      <GithubIcon size={15} className="mr-2" />
+                      Connect GitHub Account
+                    </Button>
+                  )}
+
+                  {user && installUrl && (
+                    <a
+                      href={installUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="h-9 px-3.5 border border-neutral-5 hover:border-neutral-12 bg-neutral-1 text-xs rounded-xs inline-flex items-center gap-1.5 font-medium text-neutral-11 hover:text-neutral-12 transition-colors cursor-pointer"
+                    >
+                      <GithubIcon size={13} />
+                      <span>Install App on Organizations</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
               </div>
 
               {/* Option B: Try with Demo Data */}
@@ -544,7 +578,67 @@ export const FirstRunExperienceV4: React.FC<FirstRunExperienceV4Props> = ({
 
             {/* Repositories Selection List */}
             <div className="border border-neutral-4 rounded-xs divide-y divide-neutral-4 max-h-[460px] overflow-y-auto bg-neutral-1">
-              {visibleCandidateRepos.length === 0 ? (
+              {candidateRepos.length === 0 ? (
+                <div className="py-12 px-6 text-center space-y-4">
+                  <div className="space-y-1.5 max-w-md mx-auto">
+                    <h3 className="text-sm font-semibold text-neutral-12">
+                      {isRefreshingCandidateRepos ? 'Checking for repositories…' : 'No repositories discovered yet'}
+                    </h3>
+                    <p className="text-xs text-neutral-9 leading-relaxed">
+                      {user
+                        ? `We haven't found repositories for @${user.login} yet. If your projects belong to an organization, make sure you install the RepoPulse GitHub App or grant repository permissions.`
+                        : 'Sign in with GitHub or explore with pre-populated demo data.'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                    {installUrl && (
+                      <a
+                        href={installUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="h-8 px-3 text-xs bg-neutral-12 text-neutral-1 rounded-xs inline-flex items-center gap-1.5 font-medium hover:bg-neutral-11 transition-colors cursor-pointer"
+                      >
+                        <GithubIcon size={13} />
+                        <span>Install GitHub App</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {onRefreshRepos && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={isRefreshingCandidateRepos}
+                        onClick={async () => {
+                          setIsRefreshingCandidateRepos(true);
+                          try {
+                            await onRefreshRepos();
+                            toast.success('Repository list refreshed');
+                          } catch {
+                            toast.error('Unable to refresh repositories right now');
+                          } finally {
+                            setIsRefreshingCandidateRepos(false);
+                          }
+                        }}
+                      >
+                        <RotateCcw size={13} className={cn('mr-1.5', isRefreshingCandidateRepos && 'animate-spin')} />
+                        <span>Check Again / Sync</span>
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        onTryDemo();
+                        setCurrentStep('select');
+                      }}
+                    >
+                      <Sparkles size={13} className="mr-1.5 text-neutral-12" />
+                      <span>Try Demo Repositories</span>
+                    </Button>
+                  </div>
+                </div>
+              ) : visibleCandidateRepos.length === 0 ? (
                 <div className="py-12 text-center text-xs text-neutral-8 font-mono">
                   No repositories match your current filters.
                 </div>

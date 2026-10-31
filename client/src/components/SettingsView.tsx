@@ -117,7 +117,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         repo_count: installation.repository_count || 0,
         private_repo_count: 0,
         public_repo_count: installation.repository_count || 0,
-        github_installation_id: installation.installation_id || '0',
+        github_installation_id: String(installation.github_installation_id || installation.installation_id || '0'),
       }] : []);
 
   return (

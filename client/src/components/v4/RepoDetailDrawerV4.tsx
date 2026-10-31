@@ -5,6 +5,7 @@ import { ScoreRing, calculateRepoScore } from './ledger/ScoreRing.js';
 import { ActivitySparkline } from './ledger/ActivitySparkline.js';
 import { LanguageDot } from './ledger/LanguageDot.js';
 import { VerdictControl } from './ledger/VerdictControl.js';
+import { VerdictSuggestionChip } from './ledger/VerdictSuggestionChip.js';
 import { Button } from './ui/Button.js';
 import { Input } from './ui/Input.js';
 import { SimpleTooltip } from './ui/Tooltip.js';
@@ -775,7 +776,16 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
 
               {/* Quick Actions Bar */}
               <div className="border border-neutral-4 rounded-xs p-4 space-y-3 bg-neutral-2/40">
-                <h3 className="text-xs font-semibold text-neutral-12">Quick Triage & Verdict</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-neutral-12">Quick Triage & Verdict</h3>
+                  {repo.suggested_verdict && (
+                    <VerdictSuggestionChip
+                      suggestion={repo.suggested_verdict}
+                      onApplyVerdict={(decision) => (onDecision ? onDecision(repo.id, decision) : undefined)}
+                      compact
+                    />
+                  )}
+                </div>
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <VerdictControl
                     currentVerdict={repo.meta?.decision}
@@ -880,7 +890,16 @@ export const RepoDetailDrawerV4: React.FC<RepoDetailDrawerV4Props> = ({
             <div className="space-y-6 animate-in fade-in duration-fast">
               {/* Record New Decision Form */}
               <form onSubmit={handleRecordDecision} className="border border-neutral-4 rounded-xs p-4 bg-neutral-2/50 space-y-4">
-                <h3 className="text-xs font-semibold text-neutral-12">Record Verdict Decision</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-neutral-12">Record Verdict Decision</h3>
+                  {repo.suggested_verdict && (
+                    <VerdictSuggestionChip
+                      suggestion={repo.suggested_verdict}
+                      onApplyVerdict={(v) => setNewDecisionVerdict(v)}
+                      compact
+                    />
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   <label className="text-2xs font-mono uppercase text-neutral-8">Verdict Choice</label>

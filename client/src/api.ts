@@ -7,6 +7,10 @@ import type {
   SummaryStats,
   RepoMetadata,
   AnalyticsData,
+  VerdictLearningStats,
+  VerdictSuggestion,
+  VerdictFeatures,
+  Verdict,
 } from './types.js';
 
 const API_BASE = '/api';
@@ -28,6 +32,7 @@ export async function fetchMe(): Promise<{
   user: UserProfile;
   settings: UserSettings;
   installation: InstallationStatus;
+  installations?: any[];
   last_sync: SyncStatus | null;
 }> {
   const res = await fetch(`${API_BASE}/me`, {
@@ -129,7 +134,10 @@ export async function fetchSyncStatus(): Promise<SyncStatus> {
 
 export async function fetchAuthStatus(): Promise<{
   githubConfigured: boolean;
+  githubAppConfigured?: boolean;
   demoEnabled: boolean;
+  appSlug?: string | null;
+  installUrl?: string | null;
   appUrl: string;
   clientId?: string | null;
 }> {
@@ -144,6 +152,32 @@ export async function fetchAuthStatus(): Promise<{
     // fallback gracefully
   }
   return { githubConfigured: true, demoEnabled: true, appUrl: '' };
+}
+
+export async function fetchAuthMe(): Promise<{ authenticated: boolean; user: UserProfile | null }> {
+  try {
+    const res = await fetch('/auth/me', {
+      headers: getHeaders(),
+      credentials: 'include',
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback
+  }
+  return { authenticated: false, user: null };
+}
+
+export async function fetchInstallations(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/installations`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
 }
 
 export function loginWithGithub(): void {
@@ -377,3 +411,76 @@ export async function fetchSimilarRepos(
   }
   return res.json();
 }
+
+// =====================================================================
+// Personalized Verdict Learning & Suggestions
+// =====================================================================
+
+export async function fetchVerdictLearningStats(): Promise<VerdictLearningStats> {
+  const res = await fetch(`${API_BASE}/verdicts/learning`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch verdict learning stats: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function resetVerdictPersonalization(): Promise<{ ok: boolean; stats: VerdictLearningStats }> {
+  const res = await fetch(`${API_BASE}/verdicts/reset`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to reset verdict personalization: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function triggerVerdictModelTraining(): Promise<{ ok: boolean; stats: VerdictLearningStats }> {
+  const res = await fetch(`${API_BASE}/verdicts/train`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to train verdict model: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchSuggestedVerdict(
+  repoId: string | number
+): Promise<{ suggestion: VerdictSuggestion; features: VerdictFeatures }> {
+  const res = await fetch(`${API_BASE}/repos/${repoId}/suggested-verdict`, {
+    headers: getHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch suggested verdict: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function recordVerdictDecision(data: {
+  repoId: string | number;
+  verdict: Verdict;
+  suggestedVerdict?: Verdict | null;
+  suggestionConfidence?: number | null;
+  suggestionSource?: string;
+  previousVerdict?: Verdict | null;
+}): Promise<{ ok: boolean; record: any }> {
+  const res = await fetch(`${API_BASE}/verdicts/decision`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to record verdict decision: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+

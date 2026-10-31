@@ -26,8 +26,10 @@ import {
   Download,
   Check,
   Sparkles,
+  Brain,
 } from 'lucide-react';
 import { SearchIndexStatusView } from './SearchIndexStatusView.js';
+import { VerdictLearningSettingsView } from './VerdictLearningSettingsView.js';
 import { toast } from './ui/Toast.js';
 import { ACCENT_PALETTES, DENSITY_MODES, FONT_CHOICES } from '../../tokens/index.js';
 import { ScoreRing } from './ledger/ScoreRing.js';
@@ -37,16 +39,24 @@ interface SettingsViewV4Props {
   settings: UserSettings;
   installation: InstallationStatus;
   installations?: any[];
+  installUrl?: string | null;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
   onExportData: () => void;
   onDeleteAccount: () => Promise<void>;
 }
+
+const GithubIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+  </svg>
+);
 
 type SettingsSection =
   | 'account'
   | 'sync'
   | 'appearance'
   | 'scoring'
+  | 'verdicts'
   | 'search'
   | 'notifications'
   | 'data'
@@ -56,6 +66,7 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
   settings,
   installation,
   installations = [],
+  installUrl,
   onUpdateSettings,
   onExportData,
   onDeleteAccount,
@@ -284,6 +295,7 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
     { id: 'sync', label: 'Sync & Access', icon: <RefreshCw size={14} /> },
     { id: 'appearance', label: 'Appearance', icon: <Sun size={14} /> },
     { id: 'scoring', label: 'Scoring & Cadence', icon: <Flame size={14} /> },
+    { id: 'verdicts', label: 'Verdict Learning', icon: <Brain size={14} /> },
     { id: 'search', label: 'Semantic Search', icon: <Sparkles size={14} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
     { id: 'data', label: 'Data & Backup', icon: <HardDrive size={14} /> },
@@ -301,22 +313,25 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
       </div>
 
       {/* Two-Column Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pt-2 items-start">
-        {/* Left Section Navigation */}
-        <nav className="md:col-span-1 space-y-1 select-none" aria-label="Settings navigation">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8 pt-2 items-start">
+        {/* Left Section Navigation (Horizontal scroll on mobile, vertical sidebar on desktop) */}
+        <nav
+          className="md:col-span-1 flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0 select-none no-scrollbar"
+          aria-label="Settings navigation"
+        >
           {navItems.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setActiveSection(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-xs font-sans text-left transition-colors cursor-pointer ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xs text-xs font-sans text-left transition-colors cursor-pointer shrink-0 md:w-full touch-manipulation ${
                 activeSection === item.id
                   ? 'bg-neutral-12 text-neutral-1 font-medium shadow-xs'
                   : 'text-neutral-9 hover:text-neutral-12 hover:bg-neutral-2'
               }`}
             >
               <span className="shrink-0">{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
             </button>
           ))}
         </nav>
@@ -436,6 +451,13 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
                   </Button>
                 </div>
               </form>
+            </section>
+          )}
+
+          {/* SECTION: PERSONALIZED VERDICT LEARNING */}
+          {activeSection === 'verdicts' && (
+            <section className="space-y-6">
+              <VerdictLearningSettingsView />
             </section>
           )}
 
@@ -760,29 +782,73 @@ export const SettingsViewV4: React.FC<SettingsViewV4Props> = ({
                 <span className="text-2xs font-mono text-neutral-8 uppercase tracking-wider block">
                   Connected Installations
                 </span>
-                <div className="divide-y divide-neutral-4 border border-neutral-4 rounded-xs text-xs">
-                  {effectiveInstallations.map((inst, idx) => (
-                    <div key={idx} className="p-3 flex items-center justify-between">
-                      <div>
-                        <span className="font-medium text-neutral-12 block">{inst.account_login}</span>
-                        <span className="text-neutral-8 text-2xs">
-                          {inst.selection === 'all'
-                            ? 'All repositories permitted'
-                            : `Only ${inst.repo_count || 0} selected`}
-                        </span>
-                      </div>
+
+                {effectiveInstallations.length === 0 ? (
+                  <div className="p-4 border border-neutral-4 rounded-xs text-xs text-neutral-9 bg-neutral-2/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="font-medium text-neutral-12 block">No GitHub App installations connected</span>
+                      <span className="text-neutral-8 text-2xs mt-0.5 block">
+                        Install the RepoPulse GitHub App on your personal account or organizations to grant access to repositories.
+                      </span>
+                    </div>
+                    {installUrl && (
                       <a
-                        href={`https://github.com/settings/installations/${inst.github_installation_id}`}
+                        href={installUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-2xs text-neutral-11 hover:text-neutral-12 underline"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-12 text-neutral-1 hover:bg-neutral-11 text-xs rounded-xs font-medium shrink-0 transition-colors"
                       >
-                        <span>Configure on GitHub</span>
+                        <GithubIcon size={13} />
+                        <span>Install GitHub App</span>
                         <ExternalLink size={11} />
                       </a>
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-neutral-4 border border-neutral-4 rounded-xs text-xs">
+                    {effectiveInstallations.map((inst, idx) => (
+                      <div key={idx} className="p-3 flex items-center justify-between">
+                        <div>
+                          <span className="font-medium text-neutral-12 block">{inst.account_login}</span>
+                          <span className="text-neutral-8 text-2xs">
+                            {inst.selection === 'all'
+                              ? 'All repositories permitted'
+                              : `Only ${inst.repo_count || 0} selected`}
+                          </span>
+                        </div>
+                        {inst.github_installation_id && inst.github_installation_id !== '0' ? (
+                          <a
+                            href={`https://github.com/settings/installations/${inst.github_installation_id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-2xs text-neutral-11 hover:text-neutral-12 underline"
+                          >
+                            <span>Configure on GitHub</span>
+                            <ExternalLink size={11} />
+                          </a>
+                        ) : (
+                          <span className="text-2xs text-neutral-8 font-mono">Personal Account</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {installUrl && effectiveInstallations.length > 0 && (
+                  <div className="pt-2 flex items-center justify-between">
+                    <span className="text-2xs text-neutral-8">Want to track organization or team repositories?</span>
+                    <a
+                      href={installUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-neutral-11 hover:text-neutral-12 underline"
+                    >
+                      <GithubIcon size={13} />
+                      <span>Connect another account or org</span>
+                      <ExternalLink size={11} />
+                    </a>
+                  </div>
+                )}
               </div>
             </section>
           )}

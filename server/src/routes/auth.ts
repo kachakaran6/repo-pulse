@@ -8,6 +8,7 @@ import {
 } from '../auth/github.js';
 import {
   createSession,
+  validateSession,
   destroySession,
   destroyAllUserSessions,
 } from '../auth/session.js';
@@ -48,16 +49,113 @@ export function getRequestBaseUrl(req: import('express').Request): string {
 }
 
 /**
+ * Returns an absolute URL targeting the frontend client application.
+ * Solves cross-port and separate client deployment issues during OAuth callbacks.
+ */
+export function getFrontendRedirectUrl(req: import('express').Request, pathAndQuery: string): string {
+  const base = env.APP_URL ? env.APP_URL.replace(/\/+$/, '') : getRequestBaseUrl(req);
+  const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+  return `${base}${cleanPath}`;
+}
+
+/**
  * GET /auth/status
- * Public status endpoint indicating GitHub App configuration
+ * Public status endpoint indicating GitHub OAuth and GitHub App configuration
  */
 authRouter.get('/status', (req, res) => {
+  const appSlug = env.GITHUB_APP_SLUG || null;
+  const installUrl = appSlug ? `https://github.com/apps/${appSlug}/installations/new` : null;
+
   res.json({
     githubConfigured: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
+    githubAppConfigured: Boolean(env.GITHUB_APP_ID && env.GITHUB_PRIVATE_KEY_BASE64),
+    appSlug,
+    installUrl,
     demoEnabled: env.NODE_ENV !== 'production' && Boolean(env.DEV_LOGIN_ENABLED),
     appUrl: getRequestBaseUrl(req),
     clientId: env.GITHUB_CLIENT_ID ? `${env.GITHUB_CLIENT_ID.substring(0, 4)}...` : null,
   });
+});
+
+/**
+ * GET /auth/me
+ * Lightweight session verification endpoint
+ */
+authRouter.get('/me', async (req, res) => {
+  const cookieName = env.SESSION_COOKIE_NAME || (env.NODE_ENV === 'production' ? '__Host-sid' : 'sid');
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7).trim()
+    : undefined;
+  const headerToken = (req.headers['x-session-token'] as string | undefined) || bearerToken;
+  const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'] || headerToken;
+
+  if (!token || typeof token !== 'string') {
+    res.json({ authenticated: false, user: null });
+    return;
+  }
+
+  const session = await validateSession(token);
+  if (!session) {
+    res.json({ authenticated: false, user: null });
+    return;
+  }
+
+  const userRecord = await db.findUserById(session.userId);
+  if (!userRecord) {
+    res.json({ authenticated: false, user: null });
+    return;
+  }
+
+  res.json({
+    authenticated: true,
+    user: {
+      id: String(userRecord.id),
+      login: userRecord.login,
+      name: userRecord.name || userRecord.login,
+      avatar_url: userRecord.avatar_url,
+    },
+  });
+});
+
+/**
+ * Helper to handle GitHub App setup / installation callback redirects
+ */
+async function handleInstallationRedirect(req: import('express').Request, res: import('express').Response): Promise<boolean> {
+  const installationId = req.query.installation_id;
+  const setupAction = req.query.setup_action;
+
+  if (installationId && (setupAction === 'install' || setupAction === 'request' || !req.query.code)) {
+    const instIdStr = String(installationId);
+    const cookieName = env.SESSION_COOKIE_NAME || (env.NODE_ENV === 'production' ? '__Host-sid' : 'sid');
+    const token = req.cookies?.[cookieName] || req.cookies?.['sid'] || req.cookies?.['__Host-sid'];
+    const session = token ? await validateSession(token) : null;
+
+    if (session) {
+      await db.upsertInstallation(session.userId, instIdStr, 'github-installation', {
+        selection: 'all',
+      });
+      runUserSync(session.userId).catch((e) => logger.error({ error: e.message }, 'Post-installation sync error'));
+      res.redirect(getFrontendRedirectUrl(req, '/settings?tab=settings&installed=true'));
+      return true;
+    } else {
+      res.redirect(getFrontendRedirectUrl(req, `/?installed=true&installation_id=${encodeURIComponent(instIdStr)}`));
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * GET /auth/github/setup
+ * Direct setup URL configured in GitHub App settings for post-install redirects
+ */
+authRouter.get('/github/setup', async (req, res) => {
+  const handled = await handleInstallationRedirect(req, res);
+  if (!handled) {
+    res.redirect(getFrontendRedirectUrl(req, '/settings?tab=settings'));
+  }
 });
 
 /**
@@ -87,13 +185,19 @@ authRouter.get('/github/start', (req, res) => {
 
 /**
  * GET /auth/github/callback
- * Handles GitHub OAuth callback, verifies state, upserts user, creates session, redirects
+ * Handles GitHub OAuth callback & GitHub App post-install redirects
  */
 authRouter.get('/github/callback', async (req, res) => {
+  // Check if this is a GitHub App installation redirect rather than standard OAuth
+  if (req.query.installation_id && (req.query.setup_action || !req.query.code)) {
+    const handled = await handleInstallationRedirect(req, res);
+    if (handled) return;
+  }
+
   const oauth = parseOAuthQuery(req.query);
   if (!oauth) {
     logger.warn({ event: 'oauth_query_rejected' }, 'OAuth callback query was not a set of strings');
-    res.redirect('/?error=invalid_oauth_state');
+    res.redirect(getFrontendRedirectUrl(req, '/?error=invalid_oauth_state'));
     return;
   }
 
@@ -102,10 +206,10 @@ authRouter.get('/github/callback', async (req, res) => {
     const errDesc = oauth.error_description;
     logger.warn({ errCode, errDesc, event: 'oauth_error' }, 'OAuth error returned from GitHub');
     if (errCode === 'access_denied') {
-      res.redirect('/?error=access_denied');
+      res.redirect(getFrontendRedirectUrl(req, '/?error=access_denied'));
       return;
     }
-    res.redirect(`/?error=${encodeURIComponent(errCode)}`);
+    res.redirect(getFrontendRedirectUrl(req, `/?error=${encodeURIComponent(errCode)}`));
     return;
   }
 
@@ -114,12 +218,12 @@ authRouter.get('/github/callback', async (req, res) => {
 
   if (!state || !verifyAndClearOAuthState(req, res, state)) {
     logger.warn('OAuth callback rejected: Invalid or expired state parameter');
-    res.redirect('/?error=invalid_oauth_state');
+    res.redirect(getFrontendRedirectUrl(req, '/?error=invalid_oauth_state'));
     return;
   }
 
   if (!code) {
-    res.redirect('/?error=missing_code');
+    res.redirect(getFrontendRedirectUrl(req, '/?error=missing_code'));
     return;
   }
 
@@ -138,19 +242,22 @@ authRouter.get('/github/callback', async (req, res) => {
     await createSession(user.id, req, res);
     await db.logAudit(user.id, 'user_logged_in', { method: 'github_oauth' });
 
-    // Trigger initial repository sync with user's GitHub account
-    runUserSync(user.id).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
+    // Initiate initial repository sync and await briefly (up to 1.5s) to populate candidate repos before redirecting
+    await Promise.race([
+      runUserSync(user.id),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]).catch((e) => logger.error({ error: e.message }, 'Initial sync error'));
 
     // Check if this is a first-time user onboarding
     const existingRepos = await db.getUserRepos(user.id);
     if (existingRepos.length === 0) {
-      res.redirect('/welcome');
+      res.redirect(getFrontendRedirectUrl(req, '/welcome'));
     } else {
-      res.redirect('/');
+      res.redirect(getFrontendRedirectUrl(req, '/'));
     }
   } catch (err: any) {
     logger.error({ error: err.message }, 'OAuth callback processing failed');
-    res.redirect('/?error=auth_failed');
+    res.redirect(getFrontendRedirectUrl(req, '/?error=auth_failed'));
   }
 });
 

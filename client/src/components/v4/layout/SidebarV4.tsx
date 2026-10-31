@@ -71,7 +71,7 @@ export const SidebarV4: React.FC<SidebarV4Props> = ({
     { id: 'overview', label: 'Ledger', icon: Layers },
     { id: 'triage', label: 'Triage', icon: CheckSquare, badge: triageCount },
     { id: 'archive', label: 'Decisions', icon: Archive },
-    { id: 'share', label: 'Digest', icon: Share2 },
+    { id: 'share', label: 'Cards & Share', icon: Share2 },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];

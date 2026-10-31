@@ -547,3 +547,54 @@ export function computeDemoStats(repos: Repository[]): SummaryStats {
     ],
   };
 }
+
+// Attach default suggestions if not explicitly defined
+for (const repo of INITIAL_DEMO_REPOS) {
+  if (!repo.suggested_verdict && !repo.meta?.decision) {
+    const days = repo.explanation?.days ?? 30;
+    if (days <= 14) {
+      repo.suggested_verdict = {
+        verdict: 'keep',
+        confidence: 0.88,
+        probabilities: { keep: 0.82, pause: 0.12, retire: 0.06 },
+        explanation: `You usually keep repos like this: ${days} days quiet, active recent momentum.`,
+        contributingFeatures: [
+          { feature: 'days_since_last_commit', label: 'Commit Recency', impact: 'positive', description: `${days} days quiet` },
+          { feature: 'stars', label: 'Community', impact: 'positive', description: `${(repo as any).stargazers_count || 0} GitHub stars` },
+          { feature: 'hygiene_score', label: 'Repo Hygiene', impact: 'positive', description: 'Hygiene score 85/100' },
+        ],
+        source: 'ml_model',
+        decisionCount: 38,
+      };
+    } else if (days <= 30) {
+      repo.suggested_verdict = {
+        verdict: 'pause',
+        confidence: 0.78,
+        probabilities: { keep: 0.15, pause: 0.73, retire: 0.12 },
+        explanation: `You usually pause repos like this: ${days} days quiet, cooling project.`,
+        contributingFeatures: [
+          { feature: 'days_since_last_commit', label: 'Commit Recency', impact: 'negative', description: `${days} days quiet` },
+          { feature: 'twelve_week_trend', label: '12-Week Velocity', impact: 'negative', description: 'Declining 12-week velocity' },
+          { feature: 'stars', label: 'Community', impact: 'positive', description: `${(repo as any).stargazers_count || 0} GitHub stars` },
+        ],
+        source: 'ml_model',
+        decisionCount: 38,
+      };
+    } else {
+      repo.suggested_verdict = {
+        verdict: 'retire',
+        confidence: 0.94,
+        probabilities: { keep: 0.02, pause: 0.06, retire: 0.92 },
+        explanation: `You usually retire repos like this: ${days}+ days quiet, zero commit velocity.`,
+        contributingFeatures: [
+          { feature: 'days_since_last_commit', label: 'Commit Recency', impact: 'negative', description: `${days}+ days quiet` },
+          { feature: 'stars', label: 'Community Interest', impact: 'negative', description: 'Low GitHub stars' },
+          { feature: 'twelve_week_trend', label: '12-Week Velocity', impact: 'negative', description: 'Zero commit momentum' },
+        ],
+        source: 'ml_model',
+        decisionCount: 38,
+      };
+    }
+  }
+}
+

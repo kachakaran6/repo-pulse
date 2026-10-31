@@ -27,13 +27,14 @@ settingsRouter.get('/me', async (req, res) => {
 
   const settings = await db.getSettings(userId);
   const installation = await db.getInstallation(userId);
+  const installations = await db.getInstallations(userId);
   const lastSync = await db.getLatestSyncRun(userId);
 
   res.json({
     id: String(user.id),
     login: user.login,
     avatarUrl: user.avatar_url,
-    hasInstallation: Boolean(installation || (user as any).github_token),
+    hasInstallation: Boolean(installation || installations.length > 0 || (user as any).github_token),
     user: {
       id: String(user.id),
       login: user.login,
@@ -56,16 +57,33 @@ settingsRouter.get('/me', async (req, res) => {
           connected: true,
           account_login: installation.account_login,
           github_installation_id: String(installation.github_installation_id),
+          installation_id: String(installation.github_installation_id),
+          repository_selection: installation.selection || 'all',
+          repository_count: installation.repo_count || 0,
         }
       : (user as any).github_token
       ? {
           connected: true,
           token_connected: true,
           account_login: user.login,
+          repository_selection: 'all',
+          repository_count: 0,
         }
       : {
           connected: false,
         },
+    installations: installations.map((inst) => ({
+      id: String(inst.id),
+      account_login: inst.account_login,
+      account_type: inst.account_type || 'User',
+      github_installation_id: String(inst.github_installation_id),
+      installation_id: String(inst.github_installation_id),
+      selection: inst.selection || 'all',
+      repo_count: inst.repo_count || 0,
+      public_repo_count: inst.public_repo_count || 0,
+      private_repo_count: inst.private_repo_count || 0,
+      last_synced_at: inst.last_synced_at,
+    })),
     last_sync: lastSync
       ? {
           status: lastSync.status,

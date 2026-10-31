@@ -88,6 +88,62 @@ describe('HTTP Security Headers & CSP (12-SECURITY.md)', () => {
     expect(res.body).toHaveProperty('githubConfigured');
     expect(res.body).toHaveProperty('demoEnabled');
     expect(res.body).toHaveProperty('appUrl');
+    expect(res.body).toHaveProperty('githubAppConfigured');
+  });
+
+  it('GET /auth/me returns authenticated: false when unauthenticated', async () => {
+    const res = await request(app).get('/auth/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body.authenticated).toBe(false);
+    expect(res.body.user).toBeNull();
+  });
+
+  it('authenticates via session cookie and Authorization Bearer header', async () => {
+    // 1. Log in via dev login
+    const loginRes = await request(app)
+      .post('/auth/dev-login')
+      .set('X-Requested-With', 'XMLHttpRequest');
+
+    expect(loginRes.status).toBe(200);
+    const cookieHeader = loginRes.headers['set-cookie']?.[0];
+    expect(cookieHeader).toBeDefined();
+    const sidMatch = cookieHeader?.match(/sid=([a-f0-9]+);/);
+    const rawToken = sidMatch ? sidMatch[1] : null;
+
+    // 2. GET /auth/me with cookie
+    const authMeCookieRes = await request(app)
+      .get('/auth/me')
+      .set('Cookie', cookieHeader!);
+    expect(authMeCookieRes.status).toBe(200);
+    expect(authMeCookieRes.body.authenticated).toBe(true);
+    expect(authMeCookieRes.body.user.login).toBe('dev-user');
+
+    // 3. GET /api/me with Authorization: Bearer <token>
+    if (rawToken) {
+      const bearerRes = await request(app)
+        .get('/api/me')
+        .set('Authorization', `Bearer ${rawToken}`);
+      expect(bearerRes.status).toBe(200);
+      expect(bearerRes.body.user.login).toBe('dev-user');
+      expect(Array.isArray(bearerRes.body.installations)).toBe(true);
+    }
+  });
+
+  it('handles GitHub App setup redirect linking installation_id', async () => {
+    // Log in
+    const loginRes = await request(app)
+      .post('/auth/dev-login')
+      .set('X-Requested-With', 'XMLHttpRequest');
+    const cookieHeader = loginRes.headers['set-cookie']?.[0];
+
+    // Simulate GitHub App setup callback
+    const setupRes = await request(app)
+      .get('/auth/github/setup?installation_id=55667788&setup_action=install')
+      .set('Cookie', cookieHeader!);
+
+    expect(setupRes.status).toBe(302);
+    expect(setupRes.headers.location).toContain('installed=true');
   });
 
   it('GET /auth/github/start constructs dynamic redirect_uri matching host (never leaking localhost in live deployment)', async () => {
@@ -104,7 +160,7 @@ describe('HTTP Security Headers & CSP (12-SECURITY.md)', () => {
     if (location.startsWith('https://github.com')) {
       expect(location).toContain('redirect_uri=https%3A%2F%2Fnflvdye0x0n51ylz60whxkrl.kachakaran.me%2Fauth%2Fgithub%2Fcallback');
     } else {
-      expect(location).toBe('/?error=github_not_configured');
+      expect(location).toContain('error=github_not_configured');
     }
   });
 });

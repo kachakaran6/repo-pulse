@@ -20,13 +20,13 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<{ read: number; total: number }>({ read: 0, total: 0 });
-  const [appUrl, setAppUrl] = useState<string>('https://github.com/apps/repopulse');
+  const [installUrl, setInstallUrl] = useState<string>('https://github.com/apps/repopulse');
   const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     api.fetchAuthStatus().then((status) => {
-      if (status.appUrl) {
-        setAppUrl(status.appUrl);
+      if (status.installUrl || status.appUrl) {
+        setInstallUrl(status.installUrl || status.appUrl);
       }
     }).catch(() => {});
   }, []);
@@ -184,7 +184,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <a
-              href="https://github.com/apps/repopulse"
+              href={installUrl}
               target="_blank"
               rel="noreferrer"
               className="btn-primary"

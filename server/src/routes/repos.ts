@@ -6,6 +6,11 @@ import { statusOf, explainStatus } from '../core/status.js';
 import { computeUnifiedStats, type RepoWithActivity } from '../core/stats.js';
 import { sendError } from '../http/errors.js';
 import { parseRepoListQuery, parseRouteId, parseSavedViewBody } from '../http/validate.js';
+import { verdictLearningService } from '../ml/service.js';
+import { extractVerdictFeatures } from '../ml/features.js';
+import { predictWithModel } from '../ml/model.js';
+import { predictWithRules } from '../ml/rules.js';
+import type { VerdictSuggestion } from '../ml/types.js';
 
 export const reposRouter = Router();
 
@@ -29,6 +34,7 @@ reposRouter.get('/', async (req, res) => {
   };
 
   const rawRepos = await db.getUserRepos(userId);
+  const userModel = await db.getUserVerdictModel(userId);
   const statusChanges = await db.getRecentStatusChanges(userId, 7);
   const now = Date.now();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -63,6 +69,14 @@ reposRouter.get('/', async (req, res) => {
       r.relationship === 'organization' ||
       r.relationship === 'collaborator' ||
       (r.owner_login && r.owner_login !== req.user!.login);
+
+    const features = extractVerdictFeatures(r, now);
+    let suggestedVerdict: VerdictSuggestion;
+    if (userModel?.status === 'trained' && userModel?.model_data?.weights) {
+      suggestedVerdict = predictWithModel(features, userModel.model_data, userModel.decision_count);
+    } else {
+      suggestedVerdict = predictWithRules(features, userModel?.decision_count || 0);
+    }
 
     return {
       id: String(r.id),
@@ -100,6 +114,7 @@ reposRouter.get('/', async (req, res) => {
       is_retired: Boolean(isRetired),
       activity: r.activity || [],
       weekly_commits: recentCommits,
+      suggested_verdict: suggestedVerdict,
     };
   });
 
@@ -176,6 +191,12 @@ reposRouter.get('/', async (req, res) => {
     });
   } else if (sort === 'name') {
     enrichedRepos.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  } else if (sort === 'confidence' || sort === 'highest_confidence') {
+    enrichedRepos.sort((a, b) => {
+      const confA = a.suggested_verdict?.confidence ?? 0;
+      const confB = b.suggested_verdict?.confidence ?? 0;
+      return confB - confA;
+    });
   } else if (sort === 'created') {
     enrichedRepos.sort((a, b) => {
       if (!a.created_at_github) return 1;
@@ -372,8 +393,46 @@ reposRouter.patch('/:id/meta', async (req, res) => {
   const updatedMeta = await db.upsertRepoMeta(id, userId, parsed.data);
   await db.logAudit(userId, 'repo_meta_updated', { repo_id: repoId, updates: parsed.data });
 
+  // If a triage decision was made or changed, log to personalization learning
+  if (parsed.data.decision) {
+    try {
+      const userRepos = await db.getUserRepos(userId);
+      const targetRepo = userRepos.find((r: any) => String(r.id) === String(id));
+      if (targetRepo) {
+        await verdictLearningService.recordDecision(userId, id, parsed.data.decision, {
+          repo: targetRepo,
+          previousVerdict: targetRepo.meta?.decision || null,
+        });
+      }
+    } catch {
+      // Non-blocking for meta update
+    }
+  }
+
   res.json({
     ok: true,
     meta: updatedMeta,
   });
+});
+
+/**
+ * GET /api/repos/:id/suggested-verdict
+ * Returns predicted verdict suggestion and contributing features for a single repo
+ */
+reposRouter.get('/:id/suggested-verdict', async (req, res) => {
+  const userId = req.user!.id;
+  const repoId = req.params.id;
+
+  const id = parseRouteId(repoId, res);
+  if (!id) return;
+
+  const rawRepos = await db.getUserRepos(userId);
+  const targetRepo = rawRepos.find((r: any) => String(r.id) === String(id));
+  if (!targetRepo) {
+    sendError(res, 404, 'Repo Not Found', 'Repository not found');
+    return;
+  }
+
+  const result = await verdictLearningService.getSuggestedVerdict(userId, targetRepo);
+  res.json(result);
 });

@@ -55,6 +55,10 @@ export const repos = pgTable('repos', {
   created_at_github: timestamp('created_at_github', { withTimezone: true }),
   language: text('language'),
   archived_on_github: boolean('archived_on_github').default(false).notNull(),
+  stars: integer('stars').default(0).notNull(),
+  open_issues: integer('open_issues').default(0).notNull(),
+  size_kb: integer('size_kb').default(0).notNull(),
+  hygiene_score: integer('hygiene_score'),
   synced_at: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -181,3 +185,29 @@ export const searchIndexSettings = pgTable('search_index_settings', {
   status: text('status').default('idle').notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const verdicts = pgTable('verdicts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  user_id: bigint('user_id', { mode: 'number' }).references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  repo_id: bigint('repo_id', { mode: 'number' }).references(() => repos.id, { onDelete: 'cascade' }).notNull(),
+  verdict: text('verdict').$type<'keep' | 'pause' | 'retire'>().notNull(),
+  previous_verdict: text('previous_verdict').$type<'keep' | 'pause' | 'retire'>(),
+  suggested_verdict: text('suggested_verdict').$type<'keep' | 'pause' | 'retire'>(),
+  suggestion_confidence: integer('suggestion_confidence'), // basis points 0 - 10000
+  suggestion_source: text('suggestion_source').default('rule_based_cold_start').notNull(),
+  agreed: boolean('agreed'),
+  features: jsonb('features'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const userVerdictModels = pgTable('user_verdict_models', {
+  user_id: bigint('user_id', { mode: 'number' }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').default('cold_start').notNull(),
+  model_data: jsonb('model_data'),
+  decision_count: integer('decision_count').default(0).notNull(),
+  agreement_count: integer('agreement_count').default(0).notNull(),
+  override_count: integer('override_count').default(0).notNull(),
+  trained_at: timestamp('trained_at', { withTimezone: true }),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+

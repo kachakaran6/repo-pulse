@@ -25,7 +25,10 @@ import {
   HelpCircle,
   ArrowRight,
   RefreshCw,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AnimatedNumber } from './motion/AnimatedNumber.js';
 import { toast } from './ui/Toast.js';
@@ -57,6 +60,8 @@ interface OverviewViewV4Props {
   activeKeepCount?: number;
   onOpenSettings?: () => void;
   installations?: any[];
+  installUrl?: string | null;
+  onTryDemo?: () => void;
 }
 
 interface SectionItem {
@@ -91,6 +96,8 @@ export const OverviewViewV4: React.FC<OverviewViewV4Props> = ({
   wipLimitEnabled = true,
   activeKeepCount,
   onOpenSettings,
+  installUrl,
+  onTryDemo,
 }) => {
   // 1. View Mode (List, Cards, Board) with persistence
   const [viewMode, setViewMode] = useState<LedgerViewMode>(() => {
@@ -540,9 +547,40 @@ export const OverviewViewV4: React.FC<OverviewViewV4Props> = ({
       />
 
       {/* 4. Main Content: Empty State, Virtualized List, Cards Grid, or Board */}
-      {filteredRepos.length === 0 ? (
+      {repos.length === 0 ? (
         <EmptyState
-          title={filters.search ? 'No repositories found' : 'No active repositories'}
+          title="No repositories connected yet"
+          description="RepoPulse tracks commit frequencies and dates to construct your project momentum ledger. Connect your personal repositories or install the GitHub App to get started."
+          icon={<Layers className="size-6 text-neutral-8" />}
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2.5 mt-2">
+              <Button variant="primary" size="sm" onClick={() => onSync && onSync()} disabled={isSyncing}>
+                <RefreshCw size={13} className={cn('mr-1.5', isSyncing && 'animate-spin')} />
+                <span>{isSyncing ? 'Syncing...' : 'Sync with GitHub'}</span>
+              </Button>
+              {installUrl && (
+                <a
+                  href={installUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="h-8 px-3 text-xs border border-neutral-5 hover:border-neutral-12 bg-neutral-1 text-neutral-11 hover:text-neutral-12 rounded-xs inline-flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
+                >
+                  <ExternalLink size={12} />
+                  <span>Install GitHub App</span>
+                </a>
+              )}
+              {onTryDemo && (
+                <Button variant="ghost" size="sm" onClick={onTryDemo}>
+                  <Sparkles size={13} className="mr-1.5" />
+                  <span>Explore Demo Mode</span>
+                </Button>
+              )}
+            </div>
+          }
+        />
+      ) : filteredRepos.length === 0 ? (
+        <EmptyState
+          title={filters.search ? 'No repositories found' : 'No matching repositories'}
           description={
             filters.search
               ? `No repositories matched "${filters.search}". Reset your search or filters to see all repositories.`

@@ -32,6 +32,7 @@ import { RepoDetailDrawerV4 } from './components/v4/RepoDetailDrawerV4.js';
 import { ArchiveViewV4 } from './components/v4/ArchiveViewV4.js';
 import { DecisionsViewV4 } from './components/v4/DecisionsViewV4.js';
 import { DigestViewV4 } from './components/v4/DigestViewV4.js';
+import { ShareViewV4 } from './components/v4/ShareViewV4.js';
 import { AnalyticsViewV4 } from './components/v4/AnalyticsViewV4.js';
 import { LandingPageV4 } from './components/v4/LandingPageV4.js';
 import { FirstRunExperienceV4 } from './components/v4/onboarding/FirstRunExperienceV4.js';
@@ -57,6 +58,14 @@ export const App: React.FC = () => {
     theme: 'system',
   });
   const [installation, setInstallation] = useState<InstallationStatus>({ connected: false });
+  const [installations, setInstallations] = useState<any[]>([]);
+  const [authStatus, setAuthStatus] = useState<{
+    githubConfigured: boolean;
+    githubAppConfigured?: boolean;
+    demoEnabled: boolean;
+    appSlug?: string | null;
+    installUrl?: string | null;
+  } | null>(null);
   const [lastSync, setLastSync] = useState<SyncStatus | null>(null);
   const [repos, setRepos] = useState<Repository[]>([]);
   const [summarySentence, setSummarySentence] = useState<string>('');
@@ -135,10 +144,11 @@ export const App: React.FC = () => {
     if (meta) meta.setAttribute('content', isDark ? '#101827' : '#f5f7fb');
   }, [settings.theme]);
 
-  // Check auth status for dev mode
+  // Check auth status for dev mode and GitHub App install URL
   useEffect(() => {
     api.fetchAuthStatus().then((st) => {
       setDevEnabled(st.demoEnabled);
+      setAuthStatus(st);
     }).catch(() => {});
   }, []);
 
@@ -233,6 +243,7 @@ export const App: React.FC = () => {
       setUser(meData.user);
       setSettings(meData.settings);
       setInstallation(meData.installation);
+      setInstallations(meData.installations || []);
       setLastSync(meData.last_sync);
 
       const reposData = await api.fetchRepos();
@@ -727,10 +738,12 @@ export const App: React.FC = () => {
     if (isScreenV4('landing')) {
       return (
         <FirstRunExperienceV4
-          candidateRepos={repos.length > 0 ? repos : getDemoRepos()}
+          candidateRepos={isDemoMode ? getDemoRepos() : repos}
           user={user}
+          installUrl={authStatus?.installUrl}
           onGithubLogin={handleGithubLogin}
           onTryDemo={handleTryDemo}
+          onRefreshRepos={refreshRepos}
           onCompleteOnboarding={handleCompleteOnboarding}
           onExitOnboarding={() => {
             setIsWelcomeRoute(false);
@@ -818,6 +831,9 @@ export const App: React.FC = () => {
               await api.updateRepoMeta(repoId, { label: label || null });
               await refreshRepos();
             }}
+            installUrl={authStatus?.installUrl}
+            installations={installations}
+            onTryDemo={handleTryDemo}
           />
         ) : (
           <OverviewView
@@ -847,13 +863,12 @@ export const App: React.FC = () => {
 
       {activeTab === 'share' && user && (
         isScreenV4('digest') ? (
-          <DigestViewV4
+          <ShareViewV4
             user={user}
             repos={repos}
             stats={stats}
             summarySentence={summarySentence}
             onStartTriage={() => setActiveTab('triage')}
-            onNavigateShare={() => setActiveTab('share')}
           />
         ) : (
           <ShareView
@@ -904,6 +919,8 @@ export const App: React.FC = () => {
           <SettingsViewV4
             settings={settings}
             installation={installation}
+            installations={installations}
+            installUrl={authStatus?.installUrl}
             onUpdateSettings={handleUpdateSettings}
             onExportData={handleExportData}
             onDeleteAccount={handleDeleteAccount}
@@ -912,6 +929,7 @@ export const App: React.FC = () => {
           <SettingsView
             settings={settings}
             installation={installation}
+            installations={installations}
             onUpdateSettings={handleUpdateSettings}
             onExportData={handleExportData}
             onDeleteAccount={handleDeleteAccount}

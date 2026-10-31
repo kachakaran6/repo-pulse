@@ -13,6 +13,7 @@ import { settingsRouter } from './routes/settings.js';
 import { shareRouter } from './routes/share.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { searchRouter } from './routes/search.js';
+import { verdictsRouter } from './routes/verdicts.js';
 import { sendError } from './http/errors.js';
 import { logger } from './utils/logger.js';
 
@@ -128,6 +129,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api', settingsRouter);
 app.use('/api', searchRouter);
 app.use('/search', searchRouter);
+app.use('/api/verdicts', verdictsRouter);
 app.use(shareRouter);
 
 // Fallback for SPA routing if public directory exists

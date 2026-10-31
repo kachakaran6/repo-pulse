@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CommitStripV4 } from './CommitStripV4.js';
 import { Button } from './ui/Button.js';
-import { Lock, ShieldCheck, Terminal, AlertCircle, Sparkles } from 'lucide-react';
+import { Lock, ShieldCheck, Terminal, AlertCircle, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
 import type { RepoStatus } from '../../types.js';
 
 const GithubIcon: React.FC<{ size?: number }> = ({ size = 16 }) => (
@@ -108,10 +108,19 @@ export const LandingPageV4: React.FC<LandingPageV4Props> = ({
   onOpenComponents,
 }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [isConnectingGithub, setIsConnectingGithub] = useState<boolean>(false);
+  const [isLoggingInDev, setIsLoggingInDev] = useState<boolean>(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const errorParam = params.get('error');
+    const installedParam = params.get('installed');
+
+    if (installedParam === 'true') {
+      setSuccessNotice('GitHub App installation linked successfully. Continue with GitHub to complete authentication.');
+    }
+
     if (errorParam) {
       if (errorParam === 'access_denied') {
         setErrorMessage("Sign in was cancelled on GitHub. You can try again whenever you're ready.");
@@ -164,6 +173,13 @@ export const LandingPageV4: React.FC<LandingPageV4Props> = ({
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 md:px-12 py-12 md:py-20 flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
         {/* Left Column: Headline, Action, Assurance Copy */}
         <div className="flex-1 space-y-6 max-w-xl">
+          {successNotice && (
+            <div className="flex items-center gap-2 p-3 border border-verdict-keep-border/40 bg-verdict-keep-bg/40 text-verdict-keep-text text-xs rounded-xs">
+              <CheckCircle2 size={15} className="shrink-0" />
+              <span>{successNotice}</span>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="flex items-center gap-2 p-3 border border-heat-active/30 bg-heat-active/10 text-heat-active text-xs rounded-xs">
               <AlertCircle size={15} className="shrink-0" />
@@ -186,11 +202,24 @@ export const LandingPageV4: React.FC<LandingPageV4Props> = ({
             <button
               type="button"
               id="github-login-btn"
-              onClick={onGithubLogin}
-              className="h-10 px-5 bg-neutral-12 text-neutral-1 hover:bg-neutral-11 transition-colors duration-fast rounded-xs text-sm font-medium flex items-center gap-2.5 shadow-elevation-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-12 cursor-pointer"
+              disabled={isConnectingGithub}
+              onClick={() => {
+                setIsConnectingGithub(true);
+                onGithubLogin();
+              }}
+              className="h-10 px-5 bg-neutral-12 text-neutral-1 hover:bg-neutral-11 transition-colors duration-fast rounded-xs text-sm font-medium flex items-center gap-2.5 shadow-elevation-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-12 cursor-pointer disabled:opacity-70"
             >
-              <GithubIcon size={16} />
-              <span>Continue with GitHub</span>
+              {isConnectingGithub ? (
+                <>
+                  <RefreshCw size={15} className="animate-spin" />
+                  <span>Connecting to GitHub…</span>
+                </>
+              ) : (
+                <>
+                  <GithubIcon size={16} />
+                  <span>Continue with GitHub</span>
+                </>
+              )}
             </button>
 
             {/* Try with Demo Data */}
@@ -211,10 +240,22 @@ export const LandingPageV4: React.FC<LandingPageV4Props> = ({
               <button
                 type="button"
                 id="dev-login-btn"
-                onClick={onDevLogin}
-                className="h-10 px-4 border border-neutral-5 hover:border-neutral-12 text-neutral-11 hover:text-neutral-12 transition-colors duration-fast rounded-xs text-xs font-mono flex items-center gap-2 cursor-pointer"
+                disabled={isLoggingInDev}
+                onClick={async () => {
+                  setIsLoggingInDev(true);
+                  try {
+                    await onDevLogin();
+                  } finally {
+                    setIsLoggingInDev(false);
+                  }
+                }}
+                className="h-10 px-4 border border-neutral-5 hover:border-neutral-12 text-neutral-11 hover:text-neutral-12 transition-colors duration-fast rounded-xs text-xs font-mono flex items-center gap-2 cursor-pointer disabled:opacity-60"
               >
-                <Terminal size={13} />
+                {isLoggingInDev ? (
+                  <RefreshCw size={13} className="animate-spin" />
+                ) : (
+                  <Terminal size={13} />
+                )}
                 <span>Developer Mode</span>
               </button>
             )}
